@@ -23,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -149,33 +150,46 @@ public void verifyPayment(PaymentVerificationRequest request) {
     }
 }
 
-    private void activateComboSubscription(Transaction txn) {
-        com.PMRGSolution.RENAISSANCE.features.catalog.entity.Package pkg = txn.getProductPackage();
-        
-        for (ExamCategory category : pkg.getAccessibleCategories()) {
-            UserSubscription sub = subscriptionRepository.findActiveSubscription(
-                    txn.getUser().getEmail(), category.getId(), LocalDateTime.now())
-                    .orElse(UserSubscription.builder()
-                            .user(txn.getUser())
-                            .category(category)
-                            .startDate(LocalDateTime.now())
-                            .expiryDate(LocalDateTime.now())
-                            .tier(TierType.UNIVERSAL_FREE)
-                            .build());
+   private void activateComboSubscription(Transaction txn) {
+	    com.PMRGSolution.RENAISSANCE.features.catalog.entity.Package pkg = txn.getProductPackage();
+	    
+	    // 1. Create a List to hold all subscriptions for BATCH processing
+	    List<UserSubscription> subscriptionsToSave = new ArrayList<>();
+	    LocalDateTime now = LocalDateTime.now();
 
-            // Upgrade vs Renewal Logic
-            LocalDateTime baseDate = (txn.getTier().getRank() > sub.getTier().getRank()) 
-                                     ? LocalDateTime.now() 
-                                     : (sub.getExpiryDate().isAfter(LocalDateTime.now()) ? sub.getExpiryDate() : LocalDateTime.now());
+	    for (ExamCategory category : pkg.getAccessibleCategories()) {
+	        // Fetch existing sub or create a new "Free" template
+	        UserSubscription sub = subscriptionRepository.findActiveSubscription(
+	                txn.getUser().getEmail(), category.getId(), now)
+	                .orElse(UserSubscription.builder()
+	                        .user(txn.getUser())
+	                        .category(category)
+	                        .startDate(now)
+	                        .expiryDate(now)
+	                        .tier(TierType.UNIVERSAL_FREE)
+	                        .build());
 
-            sub.setExpiryDate(baseDate.plusMonths(pkg.getDurationInMonths()));
-            sub.setTier(txn.getTier());
-            sub.setProductPackage(pkg); // Used for Mock Limit check
-            sub.setActive(true);
-            
-            subscriptionRepository.save(sub);
-        }
-    }
+	        // Upgrade vs Renewal Logic
+	        LocalDateTime baseDate = (txn.getTier().getRank() > sub.getTier().getRank()) 
+	                                 ? now 
+	                                 : (sub.getExpiryDate().isAfter(now) ? sub.getExpiryDate() : now);
+
+	        sub.setExpiryDate(baseDate.plusMonths(pkg.getDurationInMonths()));
+	        sub.setTier(txn.getTier());
+	        sub.setProductPackage(pkg);
+	        sub.setActive(true);
+	        
+	        // 2. ADD to the list instead of calling .save() inside the loop
+	        subscriptionsToSave.add(sub);
+	    }
+
+	    // 3. ONE SINGLE DATABASE CALL: Atomic and high-speed
+	    if (!subscriptionsToSave.isEmpty()) {
+	        subscriptionRepository.saveAll(subscriptionsToSave);
+	        log.info("Batch activated {} subscriptions for user: {}", 
+	                 subscriptionsToSave.size(), txn.getUser().getEmail());
+	    }
+	}
 
     @Override
     public CouponValidationResponse validateCoupon(String code, UUID categoryId, Double currentPrice) {

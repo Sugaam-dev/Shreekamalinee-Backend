@@ -14,16 +14,16 @@ public class ExamScheduler {
     private final ExamSessionService examSessionService;
 
     /**
-     * Runs every 60 seconds to trigger the session cleanup.
-     * Uses fixedDelay to ensure one task finishes before the next starts.
+     * GHOST PROCTOR: Runs every 60 seconds (60000 ms).
+     * Automatically finalizes all "IN_PROGRESS" exams that have passed their expiryTime.
      */
-    @Scheduled(fixedDelay = 60000)
-    public void autoSubmitExpiredExams() {
-        log.debug("ExamScheduler: Triggering auto-submission check...");
+    @Scheduled(fixedRate = 60000)
+    public void autoFinalizeExpiredExams() {
         try {
+            // This calls the Step 5 Bulk Update logic in your Service
             examSessionService.processExpiredSessions();
         } catch (Exception e) {
-            log.error("ExamScheduler Error: Failed to process expired sessions: {}", e.getMessage());
+            log.error("Ghost Proctor encountered an error during auto-finalization: ", e);
         }
     }
 }

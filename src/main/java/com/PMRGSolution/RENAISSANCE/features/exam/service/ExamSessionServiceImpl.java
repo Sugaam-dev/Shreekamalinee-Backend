@@ -117,9 +117,15 @@ public class ExamSessionServiceImpl implements ExamSessionService {
     @Override
     @Transactional
     public void processExpiredSessions() {
-        LocalDateTime deadline = LocalDateTime.now().minusMinutes(2);
-        List<TestResult> expired = testResultRepository.findByStatusAndExpiryTimeBefore(ResultStatus.IN_PROGRESS, deadline);
-        expired.forEach(this::finalizeSession);
+        // 1. Define the deadline (any exam expiring before 'now')
+        LocalDateTime deadline = LocalDateTime.now();
+        
+        // 2. ONE SINGLE SQL CALL: Extremely fast and memory-efficient
+        int closedSessionsCount = testResultRepository.bulkFinalizeExpiredSessions(deadline);
+        
+        if (closedSessionsCount > 0) {
+            log.info("Ghost Proctor: Automatically closed {} expired sessions in bulk.", closedSessionsCount);
+        }
     }
 
     private void finalizeSession(TestResult session) {

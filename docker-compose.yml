@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8
+    container_name: mysql-db
+    restart: always
+    env_file:
+      - .env
+    ports:
+      - "3307:3306"
+
+  app:
+    build: .
+    container_name: renaissance-app
+    restart: always
+    ports:
+      - "8081:8081"
+    depends_on:
+      - mysql
+    env_file:
+      - .env

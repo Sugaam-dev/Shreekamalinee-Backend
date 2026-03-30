@@ -1,5 +1,6 @@
 package com.PMRGSolution.RENAISSANCE.features.payment.repository;
 
+import com.PMRGSolution.RENAISSANCE.Constant.TierType;
 import com.PMRGSolution.RENAISSANCE.features.payment.entity.UserSubscription;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -10,15 +11,18 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.Set;
 
 @Repository
 public interface UserSubscriptionRepository extends JpaRepository<UserSubscription, UUID> {
 
     /**
-     * CORE SECURITY: Finds exactly one active sub for a specific category.
-     * Used by ExamSessionService and CatalogService gatekeepers.
+     * OPTIMIZED SECURITY CHECK: Uses JOIN FETCH to get Category details immediately.
+     * Prevents extra queries when checking access in ExamServiceImpl.
      */
-    @Query("SELECT s FROM UserSubscription s WHERE s.user.email = :email " +
+    @Query("SELECT s FROM UserSubscription s " +
+           "JOIN FETCH s.category " + 
+           "WHERE s.user.email = :email " +
            "AND s.category.id = :categoryId " +
            "AND s.active = true " +
            "AND s.expiryDate > :now")
@@ -28,11 +32,13 @@ public interface UserSubscriptionRepository extends JpaRepository<UserSubscripti
             @Param("now") LocalDateTime now);
 
     /**
-     * DASHBOARD HYDRATION: Finds all subscriptions for the profile view.
-     * Note: 'now' here can be set to LocalDateTime.now().minusDays(2) 
-     * by the Service to show recently expired plans.
+     * OPTIMIZED DASHBOARD HYDRATION: JOIN FETCH category and user.
+     * This is the fix for the N+1 problem in your ProfileServiceImpl.
      */
-    @Query("SELECT s FROM UserSubscription s WHERE s.user.email = :email " +
+    @Query("SELECT s FROM UserSubscription s " +
+           "JOIN FETCH s.category " +
+           "JOIN FETCH s.user " +
+           "WHERE s.user.email = :email " +
            "AND s.active = true " +
            "AND s.expiryDate >= :thresholdDate")
     List<UserSubscription> findAllActiveSubscriptions(
@@ -40,13 +46,41 @@ public interface UserSubscriptionRepository extends JpaRepository<UserSubscripti
             @Param("thresholdDate") LocalDateTime thresholdDate);
 
     /**
-     * HIGH-SPEED CHECK: Returns boolean without loading full objects.
+     * STEP 3 PREVIEW: High-speed ID retrieval.
+     * Returns only the UUIDs of active categories. Very light on RAM.
      */
-    @Query("SELECT COUNT(s) > 0 FROM UserSubscription s WHERE s.user.email = :email " +
+    @Query("SELECT s.category.id FROM UserSubscription s " +
+           "WHERE s.user.email = :email " +
+           "AND s.active = true " +
+           "AND s.expiryDate > :now")
+    Set<UUID> findActiveCategoryIds(
+            @Param("email") String email, 
+            @Param("now") LocalDateTime now);
+
+    /**
+     * HIGH-SPEED CHECK: Keep as is (COUNT is already optimized).
+     */
+    @Query("SELECT COUNT(s) > 0 FROM UserSubscription s " +
+           "WHERE s.user.email = :email " +
            "AND s.category.id = :categoryId " +
            "AND s.active = true " +
            "AND s.expiryDate > :now")
     boolean existsActiveSubscription(
+            @Param("email") String email, 
+            @Param("categoryId") UUID categoryId, 
+            @Param("now") LocalDateTime now);
+    
+    
+    /**
+     * FIXED RANK CHECK: Fetches the Enum itself. 
+     * We extract the rank in the Service layer to avoid JPQL Path errors.
+     */
+    @Query("SELECT s.tier FROM UserSubscription s " +
+           "WHERE s.user.email = :email " +
+           "AND s.category.id = :categoryId " +
+           "AND s.active = true " +
+           "AND s.expiryDate > :now")
+    Optional<TierType> findActiveTier(
             @Param("email") String email, 
             @Param("categoryId") UUID categoryId, 
             @Param("now") LocalDateTime now);

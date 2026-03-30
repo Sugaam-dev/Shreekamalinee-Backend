@@ -62,14 +62,25 @@ public class CatalogServiceImpl implements CatalogService {
 
     @Override
     public List<CategoryResponse> getExamsForUser(UUID userId) {
-        User user = userRepository.findById(userId).orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+                
         List<ExamCategory> allCategories = categoryRepository.findAll();
-        List<UserSubscription> activeSubs = userSubscriptionRepository.findAllActiveSubscriptions(user.getEmail(), LocalDateTime.now());
+        
+        // FETCH: Uses our optimized JOIN FETCH query
+        List<UserSubscription> activeSubs = userSubscriptionRepository
+                .findAllActiveSubscriptions(user.getEmail(), LocalDateTime.now());
 
         return allCategories.stream().map(cat -> {
-            Optional<UserSubscription> subMatch = activeSubs.stream().filter(sub -> sub.getCategory().getId().equals(cat.getId())).findFirst();
+            // OPTIMIZATION: Match category in memory
+            Optional<UserSubscription> subMatch = activeSubs.stream()
+                    .filter(sub -> sub.getCategory().getId().equals(cat.getId()))
+                    .findFirst();
+
             boolean isSubscribed = subMatch.isPresent();
-            Long daysLeft = isSubscribed ? Math.max(0, ChronoUnit.DAYS.between(LocalDateTime.now(), subMatch.get().getExpiryDate())) : null;
+            Long daysLeft = isSubscribed ? 
+                Math.max(0, ChronoUnit.DAYS.between(LocalDateTime.now(), subMatch.get().getExpiryDate())) 
+                : null;
 
             return CategoryResponse.builder()
                     .id(cat.getId())
@@ -84,35 +95,34 @@ public class CatalogServiceImpl implements CatalogService {
     @Override
     @Transactional(readOnly = true)
     public List<DocumentResponse> getDocumentsByExam(UUID categoryId, UUID userId) {
-        // 1. Fetch User and Subscription Context
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
                 
-        Optional<UserSubscription> sub = userSubscriptionRepository.findActiveSubscription(
-                user.getEmail(), categoryId, LocalDateTime.now());
-                
-        TierType userTier = sub.map(UserSubscription::getTier).orElse(TierType.UNIVERSAL_FREE);
+        // 1. Fetch the Tier Enum itself (The Repository Fix)
+        TierType userTier = userSubscriptionRepository.findActiveTier(
+                user.getEmail(), categoryId, LocalDateTime.now())
+                .orElse(TierType.UNIVERSAL_FREE);
 
-        // 2. Map Static Documents (PDFs)
+        // 2. Get the rank from the Java Object (Safe and fast)
+        int userTierRank = userTier.getRank();
+
+        // 3. Map Static Documents (PDFs)
         List<DocumentResponse> content = documentRepository.findByCategoryIdOrderByDisplayOrderAsc(categoryId)
                 .stream()
                 .map(doc -> {
                     DocumentResponse resp = mapToDocDto(doc);
-                    // Unlock if it's a SAMPLE_PDF or user has high enough tier
-                    boolean isLocked = (userTier.getRank() < doc.getRequiredTier().getRank()) 
+                    boolean isLocked = (userTierRank < doc.getRequiredTier().getRank()) 
                                        && (doc.getContentType() != ContentTypes.SAMPLE_PDF);
-                    
                     resp.setLocked(isLocked);
-                    resp.setInteractive(false); // Static PDF action
-                    resp.setDuration(null);      
+                    resp.setInteractive(false); 
                     return resp;
                 }).collect(Collectors.toCollection(ArrayList::new));
 
-        // 3. Map Interactive Exams (Mock Tests, Quizzes)
+        // 4. Map Interactive Exams (Mock Tests, Quizzes)
         List<DocumentResponse> exams = examRepository.findByCategoryId(categoryId)
                 .stream()
                 .filter(Exam::isPublished)
-                .<DocumentResponse>map(exam -> DocumentResponse.builder()
+                .map(exam -> DocumentResponse.builder()
                         .id(exam.getId())
                         .title(exam.getTitle())
                         .documentType(exam.getContentType().name()) 
@@ -120,17 +130,13 @@ public class CatalogServiceImpl implements CatalogService {
                         .requiredTier(exam.getRequiredTier().name())
                         .displayOrder(exam.getDisplayOrder() != null ? exam.getDisplayOrder() : 0)
                         .createdAt(exam.getCreatedAt())
-                        .locked(userTier.getRank() < exam.getRequiredTier().getRank())
-                        .interactive(true)            // Launch Exam Player action
+                        .locked(userTierRank < exam.getRequiredTier().getRank()) // Using userTierRank
+                        .interactive(true) 
                         .duration(exam.getDurationMinutes()) 
                         .build())
                 .collect(Collectors.toList());
 
-        // 4. Merge
         content.addAll(exams);
-        
-        // 5. Unified Sorting Logic: 
-        // First by displayOrder (Curriculum), then by createdAt (Recency)
         content.sort(Comparator.comparing(DocumentResponse::getDisplayOrder, 
                      Comparator.nullsLast(Comparator.naturalOrder()))
                      .thenComparing(DocumentResponse::getCreatedAt, 

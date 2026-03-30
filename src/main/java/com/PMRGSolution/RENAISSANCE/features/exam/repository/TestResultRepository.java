@@ -1,8 +1,12 @@
 package com.PMRGSolution.RENAISSANCE.features.exam.repository;
 
 import com.PMRGSolution.RENAISSANCE.features.exam.entity.TestResult;
+
+import jakarta.transaction.Transactional;
+
 import com.PMRGSolution.RENAISSANCE.Constant.ResultStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -33,6 +37,20 @@ public interface TestResultRepository extends JpaRepository<TestResult, UUID> {
      * Checks if a user has already started this specific exam before.
      */
     boolean existsByUserEmailAndExamId(String email, UUID examId);
+    
+    /**
+     * GHOST PROCTOR CORE: Bulk updates all expired sessions in one SQL call.
+     * Replaces the slow Java loop for 50,000+ user scalability.
+     */
+    @Modifying
+    @Transactional
+    @Query("UPDATE TestResult tr " +
+           "SET tr.status = com.PMRGSolution.RENAISSANCE.Constant.ResultStatus.UNDER_EVALUATION, " +
+           "    tr.submittedAt = tr.expiryTime, " +
+           "    tr.fullyEvaluated = false " +
+           "WHERE tr.status = com.PMRGSolution.RENAISSANCE.Constant.ResultStatus.IN_PROGRESS " +
+           "AND tr.expiryTime < :deadline")
+    int bulkFinalizeExpiredSessions(@Param("deadline") LocalDateTime deadline);
 
     // --- GENERAL FETCHING ---
     long countByUserEmailAndExamIdAndStatus(String email, UUID examId, ResultStatus status);

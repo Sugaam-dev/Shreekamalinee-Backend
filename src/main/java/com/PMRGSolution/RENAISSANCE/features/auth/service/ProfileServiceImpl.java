@@ -73,16 +73,19 @@ public class ProfileServiceImpl implements ProfileService {
         log.info("Profile successfully updated for: {}", user.getEmail());
     }
 
-    private UserAccountDTO.SubscriptionBrief mapToSubscriptionBrief(UserSubscription sub) {
-        long daysRemaining = ChronoUnit.DAYS.between(LocalDateTime.now(), sub.getExpiryDate());
-        
-        return UserAccountDTO.SubscriptionBrief.builder()
-                .categoryId(sub.getCategory().getId())
-                .categoryName(sub.getCategory().getDisplayName())
-                .tier(sub.getTier())
-                .expiryDate(sub.getExpiryDate())
-                .daysRemaining(Math.max(0, daysRemaining))
-                .isExpired(LocalDateTime.now().isAfter(sub.getExpiryDate()))
-                .build();
-    }
+   private UserAccountDTO.SubscriptionBrief mapToSubscriptionBrief(UserSubscription sub) {
+    // Current time for comparison
+    LocalDateTime now = LocalDateTime.now();
+    long daysRemaining = ChronoUnit.DAYS.between(now, sub.getExpiryDate());
+    boolean isExpired = now.isAfter(sub.getExpiryDate());
+    
+    return UserAccountDTO.SubscriptionBrief.builder()
+            .categoryId(sub.getCategory().getId())
+            .categoryName(sub.getCategory().getDisplayName()) // <-- FAST: Category already fetched!
+            .tier(sub.getTier())
+            .expiryDate(sub.getExpiryDate())
+            .daysRemaining(Math.max(0, daysRemaining))
+            .isExpired(isExpired)
+            .build();
+}
 }
