@@ -34,7 +34,6 @@ build/
 
 # Environment variables
 .env
-.env.*
 *.env
 
 # But allow example file
