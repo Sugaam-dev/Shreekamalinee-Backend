@@ -118,8 +118,8 @@ public class AuthController {
                 .path("/")
                 .maxAge(0) // Expire immediately
                 .httpOnly(true)
-                .secure(false) // Set to true in production
-                .sameSite("Strict")
+                .secure(true) // Set to true in production
+                .sameSite("None")
                 .build();
 
         return ResponseEntity.ok()
@@ -140,8 +140,8 @@ public class AuthController {
                 .path("/")
                 .maxAge(24 * 60 * 60) // 24 Hours
                 .httpOnly(true)
-                .secure(false) // Set to TRUE in production for HTTPS
-                .sameSite("Strict")
+                .secure(true) // Set to TRUE in production for HTTPS
+                .sameSite("None")
                 .build();
 
         return ResponseEntity.ok()
