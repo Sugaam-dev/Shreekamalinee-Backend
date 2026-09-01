@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:th="http://www.thymeleaf.org">
+<body>
+  <div th:replace="~{email/layout/base-layout :: main(~{::#inquiryAlertContent})}">
+    <div id="inquiryAlertContent">
+      <div style="background-color: #fdfaf0; border-left: 4px solid #7b121c; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
+        <strong style="color: #7b121c; font-size: 16px;">✉️ NEW CUSTOMER INQUIRY RECEIVED</strong>
+      </div>
+      <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="width: 100%; font-size: 14px; margin-bottom: 20px;">
+        <tr><td style="padding: 6px 0; color: #666; width: 140px;">Patron Name:</td><td><strong th:text="${name}">Patron</strong></td></tr>
+        <tr><td style="padding: 6px 0; color: #666;">Email Address:</td><td><a th:href="'mailto:' + ${email}" th:text="${email}">email@example.com</a></td></tr>
+        <tr><td style="padding: 6px 0; color: #666;">Phone / WhatsApp:</td><td><strong th:text="${phone ?: 'N/A'}">0000000000</strong></td></tr>
+        <tr><td style="padding: 6px 0; color: #666;">Subject Topic:</td><td><strong th:text="${subject}">Subject</strong></td></tr>
+      </table>
+
+      <div style="background-color: #fafafa; border: 1px solid #e0e0e0; border-radius: 4px; padding: 15px; margin-bottom: 20px;">
+        <strong style="color: #333; display: block; margin-bottom: 6px;">Message Details:</strong>
+        <p style="color: #555; line-height: 1.6; margin: 0; font-size: 13.5px;" th:text="${message}">Message body</p>
+      </div>
+
+      <div style="margin-top: 25px; text-align: center;">
+        <a th:href="${inquiriesUrl ?: 'https://www.shreekamalinee.com/admin/inquiries'}" target="_blank" style="display: inline-block; padding: 12px 24px; background-color: #7b121c; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 700;">VIEW INQUIRIES DESK →</a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

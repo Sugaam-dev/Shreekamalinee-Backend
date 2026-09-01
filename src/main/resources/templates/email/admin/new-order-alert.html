@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:th="http://www.thymeleaf.org">
+<body>
+  <div th:replace="~{email/layout/base-layout :: main(~{::#adminNewOrderContent})}">
+    <div id="adminNewOrderContent">
+      <div style="background-color: #e8f8f0; border-left: 4px solid #27ae60; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
+        <strong style="color: #27ae60; font-size: 16px;">🚨 NEW ORDER RECEIVED: <span th:text="${orderNumber}">SK-2026-0001</span></strong>
+      </div>
+      <p>A new order has been placed on the Shreekamalinee Storefront.</p>
+      <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="width: 100%; font-size: 14px; margin-bottom: 20px;">
+        <tr><td style="padding: 6px 0; color: #666; width: 140px;">Customer:</td><td><strong th:text="${customerName}">Patron</strong> (<span th:text="${customerEmail}">email@example.com</span>)</td></tr>
+        <tr><td style="padding: 6px 0; color: #666;">Destination:</td><td><strong th:text="${customerCityState}">City, State</strong></td></tr>
+        <tr><td style="padding: 6px 0; color: #666;">Payment Method:</td><td><strong th:text="${paymentMethod}">COD</strong> (Status: <span th:text="${paymentStatus}">PENDING</span>)</td></tr>
+      </table>
+
+      <h4 style="margin-bottom: 8px; color: #7b121c; font-family: Georgia, serif;">Items Ordered:</h4>
+      <div th:replace="~{email/components/items-table :: itemsTable}"></div>
+
+      <h4 style="margin-bottom: 8px; margin-top: 20px; color: #7b121c; font-family: Georgia, serif;">Financial & Price Calculation Breakdown:</h4>
+      <div th:replace="~{email/components/price-breakdown :: breakdown}"></div>
+
+      <div style="margin-top: 25px; text-align: center;">
+        <a th:href="${adminOrderUrl ?: 'https://www.shreekamalinee.com/admin/orders'}" target="_blank" style="display: inline-block; padding: 12px 24px; background-color: #7b121c; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 700;">OPEN IN ADMIN PANEL →</a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

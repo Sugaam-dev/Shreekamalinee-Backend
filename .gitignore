@@ -35,6 +35,7 @@ build/
 # Environment variables
 .env
 *.env
+*.env.local
 
 # But allow example file
 !.env.example
@@ -46,4 +47,9 @@ application-local.yml
 # Secrets
 secrets/
 
-
+# Crash dumps & temp files
+*.stackdump
+*.log
+*.DS_Store
+Thumbs.db
+*.docx

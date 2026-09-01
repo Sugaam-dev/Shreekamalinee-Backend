@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:th="http://www.thymeleaf.org">
+<body>
+  <div th:replace="~{email/layout/base-layout :: main(~{::#adminCancelledContent})}">
+    <div id="adminCancelledContent">
+      <div style="background-color: #fbebee; border-left: 4px solid #c0392b; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
+        <strong style="color: #c0392b; font-size: 16px;">🛑 ORDER CANCELLED BY <span th:text="${#strings.toUpperCase(customerName)}">CUSTOMER</span>: <span th:text="${orderNumber}">SK-2026-0001</span></strong>
+      </div>
+      <p>Order <strong th:text="${orderNumber}">SK-2026-0001</strong> (Net Amount: <strong th:text="${finalTotalFormatted}">₹0.00</strong>) has been cancelled.</p>
+      <p><strong>Warehouse Notice:</strong> Do NOT dispatch this order. Locked inventory stock has been automatically returned to store inventory.</p>
+
+      <div style="margin-top: 20px; text-align: center;">
+        <a th:href="${adminOrderUrl ?: 'https://www.shreekamalinee.com/admin/orders'}" target="_blank" style="display: inline-block; padding: 12px 24px; background-color: #7b121c; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 700;">VIEW IN ADMIN PANEL →</a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

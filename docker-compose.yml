@@ -1,22 +1,41 @@
-version: '3.8'
-
 services:
-  mysql:
-    image: mysql:8
-    container_name: mysql-db
+  postgres:
+    image: postgres:15
+    container_name: postgres-db
     restart: always
-    env_file:
-      - .env
+    environment:
+      POSTGRES_DB: shreekamalinee
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
     ports:
-      - "3307:3306"
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    container_name: redis-cache
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
 
   app:
     build: .
-    container_name: renaissance-app
+    container_name: shreekamalinee-app
     restart: always
     ports:
       - "8081:8081"
     depends_on:
-      - mysql
+      - postgres
+      - redis
+    environment:
+      - DB_URL=jdbc:postgresql://postgres:5432/shreekamalinee
+      - REDIS_HOST=redis
     env_file:
       - .env
+
+volumes:
+  pgdata:
+  redisdata:

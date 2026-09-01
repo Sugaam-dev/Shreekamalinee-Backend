@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:th="http://www.thymeleaf.org">
+<body>
+  <div th:replace="~{email/layout/base-layout :: main(~{::#otpContent})}">
+    <div id="otpContent">
+      <h2 style="color: #7b121c; margin-top: 0; font-family: Georgia, serif;">Verify Your Account</h2>
+      <p>Namaste,</p>
+      <p>Thank you for registering with <strong>Shreekamalinee</strong>. Use the 6-digit verification code below to verify your email address:</p>
+      <div style="display: block; width: fit-content; margin: 25px auto; padding: 15px 30px; background-color: #fcebeb; border: 2px dashed #7b121c; border-radius: 8px; font-size: 32px; font-weight: 700; letter-spacing: 6px; color: #7b121c; text-align: center;" th:text="${otp}">123456</div>
+      <p>This verification code is valid for <strong>10 minutes</strong>. If you did not sign up for an account, please disregard this message.</p>
+    </div>
+  </div>
+</body>
+</html>

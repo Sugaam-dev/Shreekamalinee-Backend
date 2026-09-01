@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:th="http://www.thymeleaf.org">
+<body>
+  <div th:replace="~{email/layout/base-layout :: main(~{::#deliveredContent})}">
+    <div id="deliveredContent">
+      <div style="text-align: center; margin-bottom: 25px;">
+        <div style="display: inline-block; padding: 6px 16px; background-color: #e8f8f0; color: #27ae60; border-radius: 20px; font-weight: 700; font-size: 13px;">DELIVERED</div>
+        <h2 style="color: #7b121c; margin: 10px 0 5px; font-family: Georgia, serif;">Your Handloom Saree Has Arrived! ✨</h2>
+        <p style="color: #666; margin: 0; font-size: 14px;">Order Reference: <strong th:text="${orderNumber}">SK-2026-0001</strong></p>
+      </div>
+
+      <p>Namaste <strong th:text="${customerName}">Valued Customer</strong>,</p>
+      <p>Your order <strong th:text="${orderNumber}">SK-2026-0001</strong> has been successfully delivered to your doorstep. We hope you cherish the authentic artistry woven into every thread.</p>
+
+      <div style="background-color: #fdfaf0; border: 1px solid #d4af37; border-radius: 8px; padding: 20px; margin: 25px 0; text-align: center;">
+        <h4 style="margin: 0 0 10px; color: #7b121c; font-size: 16px; font-family: Georgia, serif;">Share Your Experience</h4>
+        <p style="margin: 0 0 15px; font-size: 13.5px; color: #555;">How does your new saree feel? Your review helps fellow patrons discover authentic Indian handlooms.</p>
+        <a th:href="${reviewUrl ?: 'https://www.shreekamalinee.com/account/orders'}" target="_blank" style="display: inline-block; padding: 10px 24px; background-color: #d4af37; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 700; font-size: 13.5px;">RATE & REVIEW YOUR SAREE ★★★★★</a>
+      </div>
+
+      <p style="color: #777; font-size: 13px;">If you have any questions regarding saree drape care or maintenance, reach out to our handloom care specialists at support@shreekamalinee.com.</p>
+    </div>
+  </div>
+</body>
+</html>

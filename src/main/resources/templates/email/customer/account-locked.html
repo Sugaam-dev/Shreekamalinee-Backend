@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:th="http://www.thymeleaf.org">
+<body>
+  <div th:replace="~{email/layout/base-layout :: main(~{::#lockedContent})}">
+    <div id="lockedContent">
+      <h2 style="color: #c0392b; margin-top: 0; font-family: Georgia, serif;">Security Alert: Account Temporarily Locked</h2>
+      <p>Namaste <strong th:text="${userName}">Valued Patron</strong>,</p>
+      <p>For your security, your <strong>Shreekamalinee</strong> account has been temporarily locked for <strong>15 minutes</strong> due to 5 consecutive failed password attempts.</p>
+      <div style="padding: 15px; background-color: #fdf2e9; border-left: 4px solid #e67e22; border-radius: 4px; margin: 20px 0;">
+        <strong>What should you do?</strong><br/>
+        • You can try logging in again after 15 minutes.<br/>
+        • If you forgot your password, you can use the 'Forgot Password' feature on our website to reset it instantly.
+      </div>
+      <p>Warm regards,<br/>Team Shreekamalinee</p>
+    </div>
+  </div>
+</body>
+</html>

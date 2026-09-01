@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:th="http://www.thymeleaf.org">
+<body>
+  <div th:replace="~{email/layout/base-layout :: main(~{::#vipAlertContent})}">
+    <div id="vipAlertContent">
+      <div style="background-color: #fdfaf0; border-left: 4px solid #d4af37; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
+        <strong style="color: #d4af37; font-size: 16px;">💎 VIP LUXURY ORDER RECEIVED: <span th:text="${finalTotalFormatted}">₹30,000.00</span></strong>
+      </div>
+      <p>A high-value luxury bridal/collector order (₹25,000+) was placed by <strong th:text="${customerName}">Patron</strong>.</p>
+      <p>Order Reference: <strong th:text="${orderNumber}">SK-2026-0001</strong> | Net Total: <strong style="color: #7b121c; font-size: 18px;" th:text="${finalTotalFormatted}">₹30,000.00</strong></p>
+
+      <div th:replace="~{email/components/price-breakdown :: breakdown}"></div>
+
+      <p><strong>Action Required:</strong> Prepare premium bespoke Shreekamalinee presentation box & silk certificate.</p>
+      <div style="margin-top: 20px; text-align: center;">
+        <a th:href="${adminOrderUrl ?: 'https://www.shreekamalinee.com/admin/orders'}" target="_blank" style="display: inline-block; padding: 12px 24px; background-color: #7b121c; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 700;">VIEW VIP ORDER →</a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

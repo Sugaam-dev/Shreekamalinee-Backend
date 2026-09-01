@@ -1,0 +1,11 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:th="http://www.thymeleaf.org">
+<body>
+  <div th:fragment="addressBlock" style="font-size: 14px; line-height: 1.5; color: #444; background-color: #fafafa; padding: 12px; border-radius: 6px; border: 1px solid #eee; margin: 10px 0;">
+    <strong th:text="${recipientName}">Patron Customer</strong><br/>
+    <span th:text="${addressLine1}">Street Address</span><span th:if="${addressLine2 != null && !#strings.isEmpty(addressLine2)}" th:text="', ' + ${addressLine2}">, Apt</span><br/>
+    <span th:text="${city}">City</span>, <span th:text="${state}">State</span> - <span th:text="${postalCode}">000000</span><br/>
+    <span th:text="${country ?: 'India'}">India</span> | Phone: <span th:text="${phoneNumber}">0000000000</span>
+  </div>
+</body>
+</html>

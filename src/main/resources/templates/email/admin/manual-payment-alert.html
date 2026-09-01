@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:th="http://www.thymeleaf.org">
+<body>
+  <div th:replace="~{email/layout/base-layout :: main(~{::#manualPaymentContent})}">
+    <div id="manualPaymentContent">
+      <div style="background-color: #fff9e6; border-left: 4px solid #f39c12; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
+        <strong style="color: #d35400; font-size: 16px;">⚠️ MANUAL UPI RECEIPT PENDING VERIFICATION</strong>
+      </div>
+      <p>Customer <strong th:text="${customerName}">Patron</strong> has uploaded a UPI payment screenshot for Order <strong th:text="${orderNumber}">SK-2026-0001</strong> (Net Total: <strong th:text="${finalTotalFormatted}">₹0.00</strong>).</p>
+
+      <div th:replace="~{email/components/price-breakdown :: breakdown}"></div>
+
+      <p>Please review the uploaded receipt in the Admin Dashboard, verify the bank transaction, and approve or reject the order.</p>
+      <div style="margin-top: 20px; text-align: center;">
+        <a th:href="${adminOrderUrl ?: 'https://www.shreekamalinee.com/admin/orders'}" target="_blank" style="display: inline-block; padding: 12px 24px; background-color: #d35400; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 700;">VERIFY RECEIPT NOW →</a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
