@@ -8,6 +8,7 @@ import com.pmrgsolution.features.address.repository.ShippingAddressRepository;
 import com.pmrgsolution.features.auth.entity.User;
 import com.pmrgsolution.features.auth.repository.UserRepository;
 import com.pmrgsolution.features.auth.service.EmailService;
+import com.pmrgsolution.features.auth.service.EmailUsageService;
 import com.pmrgsolution.features.cart.entity.Cart;
 import com.pmrgsolution.features.cart.entity.CartItem;
 import com.pmrgsolution.features.cart.repository.CartItemRepository;
@@ -66,6 +67,7 @@ public class OrderServiceImpl implements OrderService {
     private final CouponService couponService;
     private final StoreSettingsService storeSettingsService;
     private final EmailService emailService;
+    private final EmailUsageService emailUsageService;
     private final com.pmrgsolution.features.payment.repository.TransactionRepository transactionRepository;
     private final org.springframework.data.redis.core.StringRedisTemplate redisTemplate;
 
@@ -80,13 +82,21 @@ public class OrderServiceImpl implements OrderService {
     @Transactional
     @CacheEvict(value = {"products", "catalog", "categories"}, allEntries = true)
     public OrderResponse createOrder(UUID userId, CheckoutRequest request, String idempotencyKey) {
-        // IDEMPOTENCY CHECK: Use Redis so this works across restarts and multiple application instances
+        // IDEMPOTENCY CHECK: Use Redis with graceful fallback if Redis is down
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-            String redisKey = IDEMPOTENCY_KEY_PREFIX + idempotencyKey;
-            Boolean alreadyProcessed = redisTemplate.hasKey(redisKey);
-            if (Boolean.TRUE.equals(alreadyProcessed)) {
-                log.info("Idempotency key already processed, rejecting duplicate: {}", idempotencyKey);
-                throw new BusinessException("This order has already been placed. Please check your orders page.", org.springframework.http.HttpStatus.CONFLICT);
+            try {
+                if (redisTemplate != null && redisTemplate.getConnectionFactory() != null) {
+                    String redisKey = IDEMPOTENCY_KEY_PREFIX + idempotencyKey;
+                    Boolean alreadyProcessed = redisTemplate.hasKey(redisKey);
+                    if (Boolean.TRUE.equals(alreadyProcessed)) {
+                        log.info("Idempotency key already processed, rejecting duplicate: {}", idempotencyKey);
+                        throw new BusinessException("This order has already been placed. Please check your orders page.", org.springframework.http.HttpStatus.CONFLICT);
+                    }
+                }
+            } catch (BusinessException be) {
+                throw be;
+            } catch (Exception ex) {
+                log.warn("Redis idempotency check skipped due to Redis unavailability: {}", ex.getMessage());
             }
         }
 
@@ -309,11 +319,17 @@ public class OrderServiceImpl implements OrderService {
         OrderResponse response = mapToResponse(savedOrder);
         // Record idempotency key in Redis with TTL so future duplicates are rejected
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-            redisTemplate.opsForValue().set(
-                IDEMPOTENCY_KEY_PREFIX + idempotencyKey,
-                savedOrder.getId().toString(),
-                IDEMPOTENCY_TTL
-            );
+            try {
+                if (redisTemplate != null && redisTemplate.getConnectionFactory() != null) {
+                    redisTemplate.opsForValue().set(
+                        IDEMPOTENCY_KEY_PREFIX + idempotencyKey,
+                        savedOrder.getId().toString(),
+                        IDEMPOTENCY_TTL
+                    );
+                }
+            } catch (Exception ex) {
+                log.warn("Failed to record idempotency key in Redis: {}", ex.getMessage());
+            }
         }
         return response;
     }
@@ -895,6 +911,7 @@ public class OrderServiceImpl implements OrderService {
                 .lowStockProducts(lowStockProducts)
                 .totalCustomers(totalCustomers)
                 .recentOrders(recent)
+                .emailStats(emailUsageService.getEmailStats())
                 .build();
     }
 

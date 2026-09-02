@@ -19,4 +19,5 @@ public class AdminDashboardResponse {
     private long lowStockProducts;
     private long totalCustomers;
     private List<OrderResponse> recentOrders;
+    private com.pmrgsolution.features.auth.dto.EmailStatsResponse emailStats;
 }

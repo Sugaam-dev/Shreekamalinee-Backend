@@ -27,6 +27,7 @@ import lombok.extern.slf4j.Slf4j;
 public class AuthController {
 
     private final AuthService authService;
+    private final com.pmrgsolution.features.auth.service.EmailUsageService emailUsageService;
 
     @org.springframework.beans.factory.annotation.Value("${shreekamalinee.jwt.refreshExpirationMs:7776000000}")
     private long refreshExpirationMs;
@@ -211,5 +212,16 @@ public class AuthController {
                 .header(HttpHeaders.SET_COOKIE, accessCookie.toString())
                 .header(HttpHeaders.SET_COOKIE, refreshCookie.toString())
                 .body(response);
+    }
+
+    /**
+     * PUBLIC EMAIL SERVICE & QUOTA STATUS
+     * Used by the frontend to detect if Resend daily quota is exhausted
+     * and recommend Google Sign-in to users.
+     */
+    @GetMapping("/email-service-status")
+    @Operation(summary = "Check if transactional email verification is currently active or quota exceeded")
+    public ResponseEntity<PublicEmailStatusResponse> getEmailServiceStatus() {
+        return ResponseEntity.ok(emailUsageService.getPublicEmailStatus());
     }
 }

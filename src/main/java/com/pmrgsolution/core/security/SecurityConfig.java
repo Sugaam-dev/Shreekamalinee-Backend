@@ -94,7 +94,9 @@ public class SecurityConfig {
                         // SECURITY FIX: Only coupon VALIDATE is public (for checkout preview without login)
                         // GET /api/v1/coupons (list all) is no longer public — requires authentication
                         "/api/v1/coupons/validate",
-                        "/api/v1/orders/coupons/validate"
+                        "/api/v1/orders/coupons/validate",
+                        "/api/v1/auth/email-service-status",
+                        "/api/auth/email-service-status"
                 ).permitAll()
                 .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/catalog/**", "/api/v1/settings/**", "/uploads/**").permitAll()
 

@@ -34,8 +34,10 @@ build/
 
 # Environment variables
 .env
+.env.*
 *.env
 *.env.local
+.env.production
 
 # But allow example file
 !.env.example

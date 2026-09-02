@@ -19,6 +19,7 @@ public class EmailServiceImpl implements EmailService {
 
     private final JavaMailSender mailSender;
     private final TemplateEngine templateEngine;
+    private final EmailUsageService emailUsageService;
 
     @Value("${app.mail.from:${spring.mail.username:onboarding@resend.dev}}")
     private String fromEmail;
@@ -290,10 +291,33 @@ public class EmailServiceImpl implements EmailService {
             helper.setTo(to);
             helper.setSubject(subject);
             helper.setText(html, true);
-            mailSender.send(msg);
-            log.info("Email dispatched: '{}' → {}", subject, maskEmail(to));
+            // 🔄 Smart Resend Rate-Limit & Network Resilience (Auto-retry up to 3 times)
+            int maxRetries = 3;
+            for (int attempt = 1; attempt <= maxRetries; attempt++) {
+                try {
+                    mailSender.send(msg);
+                    emailUsageService.recordEmailSent();
+                    log.info("Email dispatched successfully: '{}' → {}", subject, maskEmail(to));
+                    break; // Succeeded!
+                } catch (Exception sendEx) {
+                    if (attempt < maxRetries) {
+                        long backoffMs = attempt * 600L;
+                        log.warn("Resend email rate-limit or temporary network delay on attempt {} for {}. Retrying in {}ms...",
+                                attempt, maskEmail(to), backoffMs);
+                        try {
+                            Thread.sleep(backoffMs);
+                        } catch (InterruptedException ie) {
+                            Thread.currentThread().interrupt();
+                            break;
+                        }
+                    } else {
+                        log.error("Failed to dispatch email '{}' → {} after {} attempts: {}",
+                                subject, maskEmail(to), maxRetries, sendEx.getMessage());
+                    }
+                }
+            }
         } catch (Exception e) {
-            log.error("Failed to dispatch email '{}' → {}: {}", subject, maskEmail(to), e.getMessage());
+            log.error("Failed to prepare email '{}' → {}: {}", subject, maskEmail(to), e.getMessage());
         }
     }
 
