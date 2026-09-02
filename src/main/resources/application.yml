@@ -4,7 +4,7 @@ spring:
 
   # Database Configuration — environment variables with local defaults
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/shreekamalinee}
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/shreekamalinee_db}
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
@@ -69,9 +69,9 @@ spring:
             client-id: ${GOOGLE_CLIENT_ID:dummy-google-client-id}
             client-secret: ${GOOGLE_CLIENT_SECRET:dummy-google-client-secret}
 
-# Server Configuration — port with default 8080
+# Server Configuration — port with default 8090
 server:
-  port: ${PORT:8080}
+  port: ${PORT:8090}
   forward-headers-strategy: framework # Essential for reading real client IPs behind Cloudflare/Load Balancers
   compression:
     enabled: true

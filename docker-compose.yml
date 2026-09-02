@@ -1,10 +1,10 @@
 services:
   postgres:
     image: postgres:15
-    container_name: postgres-db
+    container_name: shreekamalinee_db
     restart: always
     environment:
-      POSTGRES_DB: shreekamalinee
+      POSTGRES_DB: shreekamalinee_db
       POSTGRES_USER: ${DB_USERNAME}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     ports:
@@ -12,17 +12,15 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d shreekamalinee"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d shreekamalinee_db"]
       interval: 3s
       timeout: 5s
       retries: 5
 
   redis:
     image: redis:7
-    container_name: redis-cache
+    container_name: shreekamalinee_redis
     restart: always
-    ports:
-      - "6379:6379"
     volumes:
       - redisdata:/data
     healthcheck:
@@ -33,17 +31,17 @@ services:
 
   app:
     build: .
-    container_name: shreekamalinee-app
+    container_name: shreekamalinee
     restart: always
     ports:
-      - "8081:8081"
+      - "8090:8090"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
     environment:
-      - DB_URL=jdbc:postgresql://postgres:5432/shreekamalinee
+      - DB_URL=jdbc:postgresql://postgres:5432/shreekamalinee_db
       - REDIS_HOST=redis
     volumes:
       - ./uploads:/app/uploads
