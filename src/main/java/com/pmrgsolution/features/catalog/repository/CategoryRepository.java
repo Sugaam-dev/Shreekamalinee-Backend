@@ -12,6 +12,14 @@ import java.util.UUID;
 public interface CategoryRepository extends JpaRepository<Category, UUID> {
     Optional<Category> findBySlug(String slug);
 
+    boolean existsBySlugAndParentCategory(String slug, Category parentCategory);
+
+    boolean existsBySlugAndParentCategoryIsNull(String slug);
+
+    boolean existsBySlugAndParentCategoryAndIdNot(String slug, Category parentCategory, UUID id);
+
+    boolean existsBySlugAndParentCategoryIsNullAndIdNot(String slug, UUID id);
+
     @EntityGraph(attributePaths = {"suggestedAttributes", "parentCategory"})
     List<Category> findAll();
 

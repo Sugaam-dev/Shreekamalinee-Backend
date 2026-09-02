@@ -1,6 +1,7 @@
 package com.pmrgsolution.features.wishlist.controller;
 
 import com.pmrgsolution.core.security.CustomUserDetails;
+import com.pmrgsolution.features.cart.dto.CartDTO;
 import com.pmrgsolution.features.catalog.dto.ProductDTO;
 import com.pmrgsolution.features.wishlist.dto.WishlistItemResponse;
 import com.pmrgsolution.features.wishlist.dto.WishlistResponse;
@@ -49,6 +50,16 @@ public class WishlistController {
             @PathVariable UUID productId) {
         wishlistService.removeFromWishlist(userDetails.getId(), productId);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{productId}/move-to-cart")
+    public ResponseEntity<CartDTO> moveToCart(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable UUID productId,
+            @RequestParam(required = false) UUID variantId,
+            @RequestParam(defaultValue = "1") Integer quantity) {
+        CartDTO cart = wishlistService.moveToCart(userDetails.getId(), productId, variantId, quantity);
+        return ResponseEntity.ok(cart);
     }
 
     @GetMapping("/{productId}/status")

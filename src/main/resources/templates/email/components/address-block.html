@@ -1,11 +1,18 @@
 <!DOCTYPE html>
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:th="http://www.thymeleaf.org">
 <body>
-  <div th:fragment="addressBlock" style="font-size: 14px; line-height: 1.5; color: #444; background-color: #fafafa; padding: 12px; border-radius: 6px; border: 1px solid #eee; margin: 10px 0;">
-    <strong th:text="${recipientName}">Patron Customer</strong><br/>
-    <span th:text="${addressLine1}">Street Address</span><span th:if="${addressLine2 != null && !#strings.isEmpty(addressLine2)}" th:text="', ' + ${addressLine2}">, Apt</span><br/>
-    <span th:text="${city}">City</span>, <span th:text="${state}">State</span> - <span th:text="${postalCode}">000000</span><br/>
-    <span th:text="${country ?: 'India'}">India</span> | Phone: <span th:text="${phoneNumber}">0000000000</span>
+  <div th:fragment="addressBlock" style="font-size: 13.5px; line-height: 1.6; color: #403631; background-color: #FAF7F2; padding: 16px 18px; border-radius: 8px; border: 1px solid #EADBCE; margin: 12px 0 16px;">
+    <div style="font-weight: 700; color: #221D1B; font-size: 14.5px; margin-bottom: 3px;" th:text="${recipientName}">Patron Customer</div>
+    <div>
+      <span th:text="${addressLine1}">Atelier Heritage Lane</span><span th:if="${addressLine2 != null && !#strings.isEmpty(addressLine2)}" th:text="', ' + ${addressLine2}">, Suite 402</span>
+    </div>
+    <div>
+      <span th:text="${city}">Mumbai</span>, <span th:text="${state}">Maharashtra</span> - <strong style="color: #800020;" th:text="${postalCode}">400001</strong>
+    </div>
+    <div style="margin-top: 6px; font-size: 12.5px; color: #7A6F68;">
+      <span>📍 <span th:text="${country ?: 'India'}">India</span></span>
+      <span style="margin-left: 12px;">📞 +91 <span th:text="${phoneNumber}">98207 00000</span></span>
+    </div>
   </div>
 </body>
 </html>

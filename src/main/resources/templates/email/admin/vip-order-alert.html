@@ -3,17 +3,38 @@
 <body>
   <div th:replace="~{email/layout/base-layout :: main(~{::#vipAlertContent})}">
     <div id="vipAlertContent">
-      <div style="background-color: #fdfaf0; border-left: 4px solid #d4af37; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
-        <strong style="color: #d4af37; font-size: 16px;">💎 VIP LUXURY ORDER RECEIVED: <span th:text="${finalTotalFormatted}">₹30,000.00</span></strong>
+      <div style="text-align: center; margin-bottom: 24px;">
+        <div style="display: inline-block; padding: 4px 16px; background-color: #FAF5FF; color: #7C3AED; border: 1px solid #DDD6FE; border-radius: 20px; font-weight: 700; font-size: 11.5px; letter-spacing: 1px; text-transform: uppercase;">
+          💎 VIP Bridal & Collector Sale
+        </div>
+        <h2 style="color: #800020; margin: 12px 0 6px; font-family: 'Playfair Display', Georgia, serif; font-size: 23px;">High-Value Luxury Order: <span th:text="${orderNumber}">SK-2026-0001</span></h2>
+        <p style="color: #7A6F68; margin: 0; font-size: 13.5px;">Bespoke Handloom Order Exceeding ₹25,000</p>
       </div>
-      <p>A high-value luxury bridal/collector order (₹25,000+) was placed by <strong th:text="${customerName}">Patron</strong>.</p>
-      <p>Order Reference: <strong th:text="${orderNumber}">SK-2026-0001</strong> | Net Total: <strong style="color: #7b121c; font-size: 18px;" th:text="${finalTotalFormatted}">₹30,000.00</strong></p>
+
+      <!-- Patron & Value Card -->
+      <div style="background-color: #FAF7F2; border: 1px solid #D6A23F; border-radius: 8px; padding: 18px 20px; margin-bottom: 22px; box-shadow: 0 4px 14px rgba(214,162,63,0.1);">
+        <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="font-size: 13.5px;">
+          <tr>
+            <td style="padding: 5px 0; color: #7A6F68; width: 140px;">VIP Patron:</td>
+            <td style="padding: 5px 0;"><strong style="color: #221D1B;" th:text="${customerName}">Patron Name</strong></td>
+          </tr>
+          <tr>
+            <td style="padding: 5px 0; color: #7A6F68;">Order Value:</td>
+            <td style="padding: 5px 0;"><strong style="color: #800020; font-size: 16px;" th:text="${finalTotalFormatted}">₹35,000.00</strong></td>
+          </tr>
+          <tr>
+            <td style="padding: 5px 0; color: #7A6F68;">Packaging Note:</td>
+            <td style="padding: 5px 0; color: #D97706; font-weight: 600;">✨ Prepare Signature Wooden Velvet Box & Certificate of Authenticity</td>
+          </tr>
+        </table>
+      </div>
 
       <div th:replace="~{email/components/price-breakdown :: breakdown}"></div>
 
-      <p><strong>Action Required:</strong> Prepare premium bespoke Shreekamalinee presentation box & silk certificate.</p>
-      <div style="margin-top: 20px; text-align: center;">
-        <a th:href="${adminOrderUrl ?: 'https://www.shreekamalinee.com/admin/orders'}" target="_blank" style="display: inline-block; padding: 12px 24px; background-color: #7b121c; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 700;">VIEW VIP ORDER →</a>
+      <div style="margin-top: 28px; text-align: center;">
+        <a th:href="${adminOrderUrl ?: ((supportUrl ?: 'https://www.shreekamalinee.com') + '/admin/orders')}" target="_blank" class="cta-btn">
+          VIEW VIP ORDER IN ADMIN →
+        </a>
       </div>
     </div>
   </div>

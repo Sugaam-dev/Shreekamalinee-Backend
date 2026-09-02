@@ -3,24 +3,45 @@
 <body>
   <div th:replace="~{email/layout/base-layout :: main(~{::#adminNewOrderContent})}">
     <div id="adminNewOrderContent">
-      <div style="background-color: #e8f8f0; border-left: 4px solid #27ae60; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
-        <strong style="color: #27ae60; font-size: 16px;">🚨 NEW ORDER RECEIVED: <span th:text="${orderNumber}">SK-2026-0001</span></strong>
+      <div style="text-align: center; margin-bottom: 24px;">
+        <div style="display: inline-block; padding: 4px 16px; background-color: #ECFDF5; color: #059669; border: 1px solid #A7F3D0; border-radius: 20px; font-weight: 700; font-size: 11.5px; letter-spacing: 1px; text-transform: uppercase;">
+          🚨 Storefront Sale Alert
+        </div>
+        <h2 style="color: #800020; margin: 12px 0 6px; font-family: 'Playfair Display', Georgia, serif; font-size: 23px;">New Order Placed: <span th:text="${orderNumber}">SK-2026-0001</span></h2>
+        <p style="color: #7A6F68; margin: 0; font-size: 13.5px;">Live Customer Transaction Recorded</p>
       </div>
-      <p>A new order has been placed on the Shreekamalinee Storefront.</p>
-      <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="width: 100%; font-size: 14px; margin-bottom: 20px;">
-        <tr><td style="padding: 6px 0; color: #666; width: 140px;">Customer:</td><td><strong th:text="${customerName}">Patron</strong> (<span th:text="${customerEmail}">email@example.com</span>)</td></tr>
-        <tr><td style="padding: 6px 0; color: #666;">Destination:</td><td><strong th:text="${customerCityState}">City, State</strong></td></tr>
-        <tr><td style="padding: 6px 0; color: #666;">Payment Method:</td><td><strong th:text="${paymentMethod}">COD</strong> (Status: <span th:text="${paymentStatus}">PENDING</span>)</td></tr>
-      </table>
 
-      <h4 style="margin-bottom: 8px; color: #7b121c; font-family: Georgia, serif;">Items Ordered:</h4>
+      <!-- Patron Snapshot Card -->
+      <div style="background-color: #FAF7F2; border: 1px solid #EADBCE; border-radius: 8px; padding: 18px 20px; margin-bottom: 22px;">
+        <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="font-size: 13.5px;">
+          <tr>
+            <td style="padding: 5px 0; color: #7A6F68; width: 140px;">Customer:</td>
+            <td style="padding: 5px 0;"><strong style="color: #221D1B;" th:text="${customerName}">Patron Name</strong> &lt;<span th:text="${customerEmail}">patron@example.com</span>&gt;</td>
+          </tr>
+          <tr>
+            <td style="padding: 5px 0; color: #7A6F68;">Destination:</td>
+            <td style="padding: 5px 0;"><strong style="color: #221D1B;" th:text="${customerCityState}">Mumbai, Maharashtra</strong></td>
+          </tr>
+          <tr>
+            <td style="padding: 5px 0; color: #7A6F68;">Payment Mode:</td>
+            <td style="padding: 5px 0;">
+              <strong style="color: #221D1B;" th:text="${paymentMethod}">DIRECT_BANK / UPI</strong> 
+              <span style="display: inline-block; margin-left: 8px; padding: 1px 8px; background-color: #F6F1EA; border-radius: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase;" th:text="'Status: ' + ${paymentStatus}">Status: PENDING</span>
+            </td>
+          </tr>
+        </table>
+      </div>
+
+      <h4 style="margin: 0 0 10px; color: #800020; font-family: 'Playfair Display', Georgia, serif; font-size: 15px; text-transform: uppercase; letter-spacing: 0.5px;">Ensembles Ordered:</h4>
       <div th:replace="~{email/components/items-table :: itemsTable}"></div>
 
-      <h4 style="margin-bottom: 8px; margin-top: 20px; color: #7b121c; font-family: Georgia, serif;">Financial & Price Calculation Breakdown:</h4>
+      <h4 style="margin: 22px 0 10px; color: #800020; font-family: 'Playfair Display', Georgia, serif; font-size: 15px; text-transform: uppercase; letter-spacing: 0.5px;">Financial & Settlement Breakdown:</h4>
       <div th:replace="~{email/components/price-breakdown :: breakdown}"></div>
 
-      <div style="margin-top: 25px; text-align: center;">
-        <a th:href="${adminOrderUrl ?: 'https://www.shreekamalinee.com/admin/orders'}" target="_blank" style="display: inline-block; padding: 12px 24px; background-color: #7b121c; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 700;">OPEN IN ADMIN PANEL →</a>
+      <div style="margin-top: 28px; text-align: center;">
+        <a th:href="${adminOrderUrl ?: ((supportUrl ?: 'https://www.shreekamalinee.com') + '/admin/orders')}" target="_blank" class="cta-btn">
+          OPEN ORDER IN ADMIN CONSOLE →
+        </a>
       </div>
     </div>
   </div>

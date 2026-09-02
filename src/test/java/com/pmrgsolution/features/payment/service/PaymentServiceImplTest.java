@@ -35,9 +35,13 @@ import static org.mockito.Mockito.*;
 class PaymentServiceImplTest {
 
     @Mock private OrderRepository orderRepository;
+    @Mock private com.pmrgsolution.features.order.repository.OrderItemRepository orderItemRepository;
     @Mock private TransactionRepository transactionRepository;
     @Mock private FileStorageService fileStorageService;
     @Mock private EmailService emailService;
+    @Mock private com.pmrgsolution.features.coupon.repository.CouponRepository couponRepository;
+    @Mock private com.pmrgsolution.features.coupon.repository.CouponUsageRepository couponUsageRepository;
+    @Mock private com.pmrgsolution.features.order.service.OrderService orderService;
 
     @InjectMocks private PaymentServiceImpl paymentService;
 

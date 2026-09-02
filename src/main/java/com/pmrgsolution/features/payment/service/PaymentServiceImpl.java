@@ -2,8 +2,11 @@ package com.pmrgsolution.features.payment.service;
 
 import com.pmrgsolution.Exception.BusinessException;
 import com.pmrgsolution.Exception.ResourceNotFoundException;
+import com.pmrgsolution.features.order.dto.OrderEmailContext;
 import com.pmrgsolution.features.order.dto.OrderResponse;
 import com.pmrgsolution.features.order.entity.Order;
+import com.pmrgsolution.features.order.entity.OrderItem;
+import com.pmrgsolution.features.order.repository.OrderItemRepository;
 import com.pmrgsolution.features.order.repository.OrderRepository;
 import com.pmrgsolution.features.payment.dto.PaymentVerificationRequest;
 import com.pmrgsolution.features.payment.dto.TransactionResponse;
@@ -37,11 +40,13 @@ import com.pmrgsolution.features.coupon.repository.CouponUsageRepository;
 public class PaymentServiceImpl implements PaymentService {
 
     private final OrderRepository orderRepository;
+    private final OrderItemRepository orderItemRepository;
     private final TransactionRepository transactionRepository;
     private final FileStorageService fileStorageService;
     private final EmailService emailService;
     private final CouponRepository couponRepository;
     private final CouponUsageRepository couponUsageRepository;
+    private final com.pmrgsolution.features.order.service.OrderService orderService;
 
     @Value("${razorpay.key.id:rzp_test_placeholder}")
     private String razorpayKeyId;
@@ -116,6 +121,9 @@ public class PaymentServiceImpl implements PaymentService {
                 order.setStatus("CONFIRMED");
                 Order savedOrder = orderRepository.save(order);
 
+                // Deduct stock upon verified Razorpay online payment
+                orderService.deductOrderStock(savedOrder);
+
                 Transaction txn = Transaction.builder()
                         .order(savedOrder)
                         .transactionId(request.getRazorpayPaymentId())
@@ -142,9 +150,10 @@ public class PaymentServiceImpl implements PaymentService {
                     });
                 }
 
+                OrderEmailContext rzpEmailCtx = buildEmailContext(savedOrder);
                 if (savedOrder.getUser() != null && savedOrder.getUser().getEmail() != null) {
                     try {
-                        emailService.sendOrderConfirmationEmail(savedOrder.getUser().getEmail(), savedOrder.getOrderNumber(), savedOrder.getFinalAmount().toString());
+                        emailService.sendOrderConfirmationEmail(savedOrder.getUser().getEmail(), rzpEmailCtx);
                     } catch (Exception e) {
                         log.warn("Failed to send Razorpay customer order confirmation email: {}", e.getMessage());
                     }
@@ -152,9 +161,9 @@ public class PaymentServiceImpl implements PaymentService {
 
                 try {
                     if (adminEmail != null && !adminEmail.isBlank()) {
-                        emailService.sendAdminNewOrderAlert(adminEmail, savedOrder);
+                        emailService.sendAdminNewOrderAlert(adminEmail, rzpEmailCtx);
                         if (savedOrder.getFinalAmount() != null && savedOrder.getFinalAmount().compareTo(BigDecimal.valueOf(25000)) >= 0) {
-                            emailService.sendAdminVipOrderAlert(adminEmail, savedOrder);
+                            emailService.sendAdminVipOrderAlert(adminEmail, rzpEmailCtx);
                         }
                     }
                 } catch (Exception e) {
@@ -194,8 +203,12 @@ public class PaymentServiceImpl implements PaymentService {
         }
 
         order.setPaymentMethod("MANUAL");
-        order.setPaymentStatus("PENDING");
+        order.setPaymentStatus("PENDING");           // stays PENDING until admin approves
+        order.setStatus("PAYMENT_PROOF_SUBMITTED");  // signals admin that proof is awaiting review
         orderRepository.save(order);
+
+        // Deduct inventory when customer actually uploads receipt and submits payment proof
+        orderService.deductOrderStock(order);
 
         Transaction txn = transactionRepository.findByOrderId(order.getId())
                 .orElseGet(() -> Transaction.builder()
@@ -230,16 +243,17 @@ public class PaymentServiceImpl implements PaymentService {
             });
         }
 
+        OrderEmailContext proofEmailCtx = buildEmailContext(order);
         if (order.getUser() != null && order.getUser().getEmail() != null) {
             try {
-                emailService.sendPaymentProofReceivedEmail(order.getUser().getEmail(), order, utrNumber);
+                emailService.sendPaymentProofReceivedEmail(order.getUser().getEmail(), proofEmailCtx);
             } catch (Exception e) {
                 log.warn("Failed to dispatch customer payment proof received email: {}", e.getMessage());
             }
         }
 
         try {
-            emailService.sendAdminManualPaymentUploadedAlert(adminEmail, order);
+            emailService.sendAdminManualPaymentUploadedAlert(adminEmail, proofEmailCtx);
         } catch (Exception e) {
             log.warn("Failed to dispatch admin manual payment alert: {}", e.getMessage());
         }
@@ -275,5 +289,10 @@ public class PaymentServiceImpl implements PaymentService {
                         .createdAt(t.getCreatedAt())
                         .build())
                 .orElse(null);
+    }
+
+    private OrderEmailContext buildEmailContext(Order order) {
+        java.util.List<OrderItem> items = orderItemRepository.findByOrderId(order.getId());
+        return OrderEmailContext.from(order, items);
     }
 }

@@ -3,25 +3,40 @@
 <body>
   <div th:replace="~{email/layout/base-layout :: main(~{::#cancelledContent})}">
     <div id="cancelledContent">
-      <div style="text-align: center; margin-bottom: 25px;">
-        <div style="display: inline-block; padding: 6px 16px; background-color: #fbebee; color: #c0392b; border-radius: 20px; font-weight: 700; font-size: 13px;">ORDER CANCELLED</div>
-        <h2 style="color: #c0392b; margin: 10px 0 5px; font-family: Georgia, serif;">Your Order Has Been Cancelled</h2>
-        <p style="color: #666; margin: 0; font-size: 14px;">Order Reference: <strong th:text="${orderNumber}">SK-2026-0001</strong></p>
+      <div style="text-align: center; margin-bottom: 26px;">
+        <div style="display: inline-block; padding: 4px 16px; background-color: #FFF1F2; color: #E11D48; border: 1px solid #FECDD3; border-radius: 20px; font-weight: 700; font-size: 11.5px; letter-spacing: 1px; text-transform: uppercase;">
+          🛑 Order Cancelled
+        </div>
+        <h2 style="color: #800020; margin: 12px 0 6px; font-family: 'Playfair Display', Georgia, serif; font-size: 23px;">Order Cancellation Notice</h2>
+        <p style="color: #7A6F68; margin: 0; font-size: 13.5px;">Order Reference: <strong style="color: #221D1B;" th:text="${orderNumber}">SK-2026-0001</strong></p>
       </div>
 
-      <p>Namaste <strong th:text="${customerName}">Valued Customer</strong>,</p>
-      <p>Your order <strong th:text="${orderNumber}">SK-2026-0001</strong> of net amount <strong th:text="${refundAmountFormatted}">₹0.00</strong> has been cancelled.</p>
+      <p>Namaste <strong th:text="${customerName}">Valued Patron</strong>,</p>
+      <p>Your order <strong style="color: #221D1B;" th:text="${orderNumber}">SK-2026-0001</strong> has been cancelled in our order management system.</p>
 
-      <div style="background-color: #fafafa; border-left: 4px solid #c0392b; padding: 15px; border-radius: 4px; margin: 20px 0;">
-        <strong>Cancellation Reason:</strong>
-        <p style="margin: 6px 0 0; color: #555;" th:text="${cancelReason}">Cancelled by customer request</p>
+      <!-- Reason Card -->
+      <div style="background-color: #FAF7F2; border-left: 4px solid #E11D48; border-radius: 6px; padding: 16px 18px; margin: 22px 0;">
+        <div style="font-size: 12px; font-weight: 700; color: #E11D48; text-transform: uppercase; letter-spacing: 0.5px;">Reason for Cancellation:</div>
+        <div style="margin-top: 5px; color: #2E2724; font-size: 13.5px;" th:text="${cancelReason}">Cancelled by patron request or administrative review</div>
       </div>
 
-      <p th:if="${refundApplicable}" style="font-size: 14px; color: #444;">
-        If payment was already deducted via Razorpay or Bank Transfer, the refund of <strong th:text="${refundAmountFormatted}">₹0.00</strong> has been initiated and will credit to your original payment source within <strong>5–7 business days</strong>.
+      <!-- Refund Notice if applicable -->
+      <div th:if="${refundApplicable}" style="background-color: #FFFDF9; border: 1px solid #EADBCE; border-radius: 8px; padding: 16px; margin: 20px 0; font-size: 13px; color: #403631; line-height: 1.6;">
+        <strong style="color: #059669;">💳 Refund Processing:</strong>
+        <p style="margin: 4px 0 0;">
+          If payment was already completed via online transfer or UPI, a refund of <strong style="color: #800020;" th:text="${refundAmountFormatted}">₹0.00</strong> will be credited to your original payment account within <strong>5–7 business days</strong>.
+        </p>
+      </div>
+
+      <div style="text-align: center; margin: 28px 0 10px;">
+        <a th:href="${(supportUrl ?: 'https://www.shreekamalinee.com') + '/shop'}" class="cta-btn">
+          EXPLORE OTHER COLLECTIONS →
+        </a>
+      </div>
+
+      <p style="color: #8A7E77; font-size: 12px; text-align: center; margin-top: 18px;">
+        Need help with this order? Reply directly to this email or reach us at <a href="mailto:support@shreekamalinee.com" style="color: #800020; font-weight: 600;">support@shreekamalinee.com</a>.
       </p>
-
-      <p style="color: #777; font-size: 13px;">If you did not request this cancellation or have any queries, please contact our concierge helpline immediately.</p>
     </div>
   </div>
 </body>

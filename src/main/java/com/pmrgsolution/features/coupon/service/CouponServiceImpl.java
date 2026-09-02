@@ -105,6 +105,12 @@ public class CouponServiceImpl implements CouponService {
     @Override
     @Transactional(readOnly = true)
     public CouponValidationResponse validateCoupon(String code, BigDecimal subtotal, UUID userId) {
+        return validateCoupon(code, subtotal, userId, null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CouponValidationResponse validateCoupon(String code, BigDecimal subtotal, UUID userId, String userEmail) {
         if (code == null || code.trim().isEmpty()) {
             return CouponValidationResponse.builder().valid(false).message("Coupon code is required").build();
         }
@@ -122,17 +128,35 @@ public class CouponServiceImpl implements CouponService {
             return CouponValidationResponse.builder().valid(false).message("Coupon usage limit exceeded").build();
         }
 
-        if (userId != null && couponUsageRepository.countByCouponIdAndUserId(coupon.getId(), userId) > 0) {
-            return CouponValidationResponse.builder().valid(false).message("You have already used this coupon").build();
+        // Resolve effective user ID & email
+        UUID effectiveUserId = userId;
+        String effectiveEmail = userEmail != null && !userEmail.isBlank() ? userEmail.trim() : null;
+
+        if (effectiveUserId == null && effectiveEmail != null) {
+            User foundUser = userRepository.findByEmailIgnoreCase(effectiveEmail).orElse(null);
+            if (foundUser != null) {
+                effectiveUserId = foundUser.getId();
+                effectiveEmail = foundUser.getEmail();
+            }
+        } else if (effectiveUserId != null && effectiveEmail == null) {
+            effectiveEmail = userRepository.findById(effectiveUserId).map(User::getEmail).orElse(null);
         }
 
+        // Check if customer has already used this single-use / restricted coupon
+        if (effectiveUserId != null && couponUsageRepository.countByCouponIdAndUserId(coupon.getId(), effectiveUserId) > 0) {
+            return CouponValidationResponse.builder().valid(false).message("This customer has already used this coupon").build();
+        }
+
+        // Check VIP / Restricted User Emails
         if (coupon.getApplicableUserEmails() != null && !coupon.getApplicableUserEmails().isEmpty()) {
-            if (userId == null) {
-                return CouponValidationResponse.builder().valid(false).message("Please login to apply this VIP exclusive coupon").build();
+            if (effectiveEmail == null || effectiveEmail.isBlank()) {
+                return CouponValidationResponse.builder().valid(false).message("Please provide customer email to apply this VIP exclusive coupon").build();
             }
-            User user = userRepository.findById(userId).orElse(null);
-            if (user == null || !coupon.getApplicableUserEmails().stream().anyMatch(e -> e.equalsIgnoreCase(user.getEmail()))) {
-                return CouponValidationResponse.builder().valid(false).message("This exclusive coupon is not applicable to your account").build();
+            final String checkEmail = effectiveEmail.trim().toLowerCase();
+            boolean isAllowed = coupon.getApplicableUserEmails().stream()
+                    .anyMatch(e -> e != null && e.trim().equalsIgnoreCase(checkEmail));
+            if (!isAllowed) {
+                return CouponValidationResponse.builder().valid(false).message("This exclusive coupon is not applicable to customer email: " + effectiveEmail).build();
             }
         }
 

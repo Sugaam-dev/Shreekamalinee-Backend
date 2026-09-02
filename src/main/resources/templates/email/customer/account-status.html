@@ -3,11 +3,32 @@
 <body>
   <div th:replace="~{email/layout/base-layout :: main(~{::#statusContent})}">
     <div id="statusContent">
-      <h2 th:style="${'color: ' + (enabled ? '#27ae60' : '#c0392b') + '; margin-top: 0; font-family: Georgia, serif;'}" th:text="'Account Status Update: ' + (enabled ? 'Reactivated' : 'Suspended')">Account Status Update</h2>
+      <div style="text-align: center; margin-bottom: 24px;">
+        <div th:if="${enabled}" style="display: inline-block; padding: 4px 16px; background-color: #ECFDF5; color: #059669; border: 1px solid #A7F3D0; border-radius: 20px; font-weight: 700; font-size: 11.5px; letter-spacing: 1px; text-transform: uppercase;">
+          ✓ Account Reactivated
+        </div>
+        <div th:unless="${enabled}" style="display: inline-block; padding: 4px 16px; background-color: #FFF1F2; color: #E11D48; border: 1px solid #FECDD3; border-radius: 20px; font-weight: 700; font-size: 11.5px; letter-spacing: 1px; text-transform: uppercase;">
+          🛑 Account Suspended
+        </div>
+        <h2 style="color: #800020; margin: 12px 0 6px; font-family: 'Playfair Display', Georgia, serif; font-size: 22px;" th:text="${enabled ? 'Your Account Has Been Reactivated' : 'Your Account Has Been Suspended'}">Account Status Update</h2>
+        <p style="color: #7A6F68; margin: 0; font-size: 13.5px;">Patron Membership Profile Update</p>
+      </div>
+
       <p>Namaste <strong th:text="${userName}">Valued Patron</strong>,</p>
-      <p th:if="${enabled}">Your account has been reactivated by our administration team. You may now log in and continue exploring our heritage handloom collection.</p>
-      <p th:unless="${enabled}">Your account has been deactivated by our administration team. If you believe this is a mistake, please reach out to our concierge support.</p>
-      <p>Warm regards,<br/>Team Shreekamalinee</p>
+
+      <div th:if="${enabled}">
+        <p>We are pleased to inform you that your <strong>Shreekamalinee</strong> account has been reactivated. You have full access to your saved sarees, order history, and exclusive artisanal collections.</p>
+        <div style="text-align: center; margin: 26px 0 10px;">
+          <a th:href="${(supportUrl ?: 'https://www.shreekamalinee.com') + '/login'}" class="cta-btn">
+            LOGIN TO YOUR ACCOUNT →
+          </a>
+        </div>
+      </div>
+
+      <div th:unless="${enabled}">
+        <p>Your <strong>Shreekamalinee</strong> account has been temporarily disabled by our store administrators in accordance with security and store policies.</p>
+        <p style="color: #7A6F68; font-size: 13px;">If you believe this suspension was made in error or wish to appeal, please reach out to our concierge support desk at <a href="mailto:support@shreekamalinee.com" style="color: #800020; font-weight: 700;">support@shreekamalinee.com</a>.</p>
+      </div>
     </div>
   </div>
 </body>

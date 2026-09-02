@@ -25,6 +25,7 @@ import com.pmrgsolution.features.coupon.repository.CouponRepository;
 import com.pmrgsolution.features.coupon.repository.CouponUsageRepository;
 import com.pmrgsolution.features.coupon.service.CouponService;
 import com.pmrgsolution.features.order.dto.*;
+import com.pmrgsolution.features.order.dto.OrderEmailContext;
 import com.pmrgsolution.features.order.entity.Order;
 import com.pmrgsolution.features.order.entity.OrderItem;
 import com.pmrgsolution.features.order.repository.OrderItemRepository;
@@ -186,7 +187,13 @@ public class OrderServiceImpl implements OrderService {
 
         BigDecimal codHandlingFee = BigDecimal.ZERO;
         if ("COD".equalsIgnoreCase(request.getPaymentMethod())) {
-            codHandlingFee = settings.getCodHandlingFee() != null ? settings.getCodHandlingFee() : BigDecimal.valueOf(99.00);
+            BigDecimal baseCodFee = settings.getCodHandlingFee() != null ? settings.getCodHandlingFee() : BigDecimal.valueOf(99.00);
+            BigDecimal freeCodThreshold = settings.getFreeCodThreshold() != null ? settings.getFreeCodThreshold() : BigDecimal.valueOf(2999.00);
+            if (subtotal.compareTo(freeCodThreshold) >= 0) {
+                codHandlingFee = BigDecimal.ZERO;
+            } else {
+                codHandlingFee = baseCodFee;
+            }
         }
 
         BigDecimal finalAmount = subtotal.subtract(discountAmount).add(shippingFee).add(codHandlingFee);
@@ -230,21 +237,6 @@ public class OrderServiceImpl implements OrderService {
                     .color(request.getDirectItem().getColor() != null ? request.getDirectItem().getColor() : (directVariant != null ? directVariant.getColor() : null))
                     .build();
             orderItemRepository.save(oi);
-
-            // RACE CONDITION FIX: Re-fetch variant with PESSIMISTIC_WRITE lock to prevent overselling
-            if (directVariant != null) {
-                ProductVariant lockedVariant = productVariantRepository.findByIdForUpdate(directVariant.getId())
-                        .orElseThrow(() -> new ResourceNotFoundException("Variant not found"));
-                if (lockedVariant.getStock() < directQuantity) {
-                    throw new BusinessException("Insufficient stock for product: " + directProduct.getName(), org.springframework.http.HttpStatus.CONFLICT);
-                }
-                lockedVariant.setStock(Math.max(0, lockedVariant.getStock() - directQuantity));
-                productVariantRepository.save(lockedVariant);
-            } else if (directProduct.getVariants() != null && !directProduct.getVariants().isEmpty()) {
-                ProductVariant firstV = directProduct.getVariants().get(0);
-                firstV.setStock(Math.max(0, firstV.getStock() - directQuantity));
-                productVariantRepository.save(firstV);
-            }
         } else {
             for (CartItem ci : purchasedCartItems) {
                 Product p = ci.getProduct();
@@ -261,20 +253,18 @@ public class OrderServiceImpl implements OrderService {
                         .build();
 
                 orderItemRepository.save(oi);
-
-                if (ci.getVariant() != null) {
-                    ProductVariant variant = ci.getVariant();
-                    variant.setStock(Math.max(0, variant.getStock() - ci.getQuantity()));
-                    productVariantRepository.save(variant);
-                } else if (p.getVariants() != null && !p.getVariants().isEmpty()) {
-                    ProductVariant firstV = p.getVariants().get(0);
-                    firstV.setStock(Math.max(0, firstV.getStock() - ci.getQuantity()));
-                    productVariantRepository.save(firstV);
-                }
             }
 
             // Only delete the items that were purchased from the cart!
             cartItemRepository.deleteAll(purchasedCartItems);
+        }
+
+        // DEDUCT STOCK TIMING RULE:
+        // Stock is deducted immediately ONLY for Cash On Delivery (COD) or instant pre-paid orders.
+        // For Manual UPI / QR / Bank Transfer & Razorpay & WhatsApp, stock is NOT deducted on order initialization;
+        // it is deducted when the user submits payment proof or Razorpay verification succeeds.
+        if ("COD".equalsIgnoreCase(savedOrder.getPaymentMethod()) || "PAID".equalsIgnoreCase(savedOrder.getPaymentStatus())) {
+            deductOrderStock(savedOrder);
         }
 
         // Only record coupon usage if payment is confirmed (e.g. COD or immediate PAID)
@@ -294,7 +284,7 @@ public class OrderServiceImpl implements OrderService {
         // Customer Confirmation Email (Only for confirmed COD or already PAID orders)
         if ("COD".equalsIgnoreCase(savedOrder.getPaymentMethod()) || "PAID".equalsIgnoreCase(savedOrder.getPaymentStatus())) {
             try {
-                emailService.sendOrderConfirmationEmail(user.getEmail(), savedOrder);
+                emailService.sendOrderConfirmationEmail(user.getEmail(), buildEmailContext(savedOrder));
             } catch (Exception e) {
                 log.warn("Failed to send order confirmation email: {}", e.getMessage());
             }
@@ -304,9 +294,11 @@ public class OrderServiceImpl implements OrderService {
         if ("COD".equalsIgnoreCase(savedOrder.getPaymentMethod()) || "PAID".equalsIgnoreCase(savedOrder.getPaymentStatus())) {
             try {
                 if (adminEmail != null && !adminEmail.isBlank()) {
-                    emailService.sendAdminNewOrderAlert(adminEmail, savedOrder);
+                    // Build context once and reuse for both admin alerts
+                    OrderEmailContext orderCtx = buildEmailContext(savedOrder);
+                    emailService.sendAdminNewOrderAlert(adminEmail, orderCtx);
                     if (savedOrder.getFinalAmount() != null && savedOrder.getFinalAmount().compareTo(BigDecimal.valueOf(25000)) >= 0) {
-                        emailService.sendAdminVipOrderAlert(adminEmail, savedOrder);
+                        emailService.sendAdminVipOrderAlert(adminEmail, orderCtx);
                     }
                 }
             } catch (Exception e) {
@@ -350,6 +342,13 @@ public class OrderServiceImpl implements OrderService {
             throw new BusinessException("Product selection is required for manual order", HttpStatus.BAD_REQUEST);
         }
 
+        if (request.getPaymentMethod() != null) {
+            String pm = request.getPaymentMethod().trim().toUpperCase();
+            if (pm.contains("RAZORPAY") || pm.equals("RAZOR_PAY") || pm.equals("ONLINE")) {
+                throw new BusinessException("Razorpay online payment is not supported for manual admin orders. Please choose WHATSAPP_UPI, DIRECT_BANK, or COD.", HttpStatus.BAD_REQUEST);
+            }
+        }
+
         // 1. Find or create User by email/phone
         String cleanEmail = request.getCustomerEmail() != null && !request.getCustomerEmail().isBlank()
                 ? request.getCustomerEmail().trim().toLowerCase()
@@ -377,9 +376,9 @@ public class OrderServiceImpl implements OrderService {
                     return userRepository.save(newUser);
                 });
 
-        // 2. Create Shipping Address
+        // 2. Create Shipping Address (Order-specific; not saved to user's profile address book)
         ShippingAddress address = ShippingAddress.builder()
-                .user(user)
+                .user(null)
                 .fullName(cleanName)
                 .phoneNumber(cleanPhone)
                 .addressLine1(request.getAddressLine1())
@@ -388,7 +387,7 @@ public class OrderServiceImpl implements OrderService {
                 .state(request.getState())
                 .postalCode(request.getPostalCode())
                 .country("India")
-                .addressType("SHIPPING")
+                .addressType("MANUAL_ORDER")
                 .isDefault(false)
                 .build();
         address = shippingAddressRepository.save(address);
@@ -405,13 +404,8 @@ public class OrderServiceImpl implements OrderService {
             if (variant.getStock() < qty) {
                 throw new BusinessException("Insufficient stock for variant: " + product.getName(), HttpStatus.CONFLICT);
             }
-            variant.setStock(variant.getStock() - qty);
-            productVariantRepository.save(variant);
         } else if (product.getStock() < qty) {
             throw new BusinessException("Insufficient stock for product: " + product.getName(), HttpStatus.CONFLICT);
-        } else {
-            product.setStock(product.getStock() - qty);
-            productRepository.save(product);
         }
 
         BigDecimal unitPrice = product.getOfferPrice() != null ? product.getOfferPrice() : product.getPrice();
@@ -421,9 +415,9 @@ public class OrderServiceImpl implements OrderService {
         BigDecimal discountAmount = BigDecimal.ZERO;
         Coupon appliedCoupon = null;
         if (request.getCouponCode() != null && !request.getCouponCode().isBlank()) {
-            CouponValidationResponse val = couponService.validateCoupon(request.getCouponCode().trim(), subtotal, user.getId());
+            CouponValidationResponse val = couponService.validateCoupon(request.getCouponCode().trim(), subtotal, user.getId(), cleanEmail);
             if (val.isValid()) {
-                discountAmount = val.getCalculatedDiscount();
+                discountAmount = val.getCalculatedDiscount() != null ? val.getCalculatedDiscount() : (val.getDiscountAmount() != null ? val.getDiscountAmount() : BigDecimal.ZERO);
                 appliedCoupon = couponRepository.findByCodeIgnoreCase(request.getCouponCode().trim()).orElse(null);
             } else {
                 log.warn("Coupon validation note for manual order: {}", val.getMessage());
@@ -474,6 +468,7 @@ public class OrderServiceImpl implements OrderService {
                 .build();
 
         orderItemRepository.save(item);
+        deductOrderStock(order);
 
         // Record Coupon Usage
         if (appliedCoupon != null) {
@@ -503,7 +498,7 @@ public class OrderServiceImpl implements OrderService {
         // Send Email confirmation if requested
         if (Boolean.TRUE.equals(request.getSendEmailNotification()) && cleanEmail.contains("@") && !cleanEmail.startsWith("guest_")) {
             try {
-                emailService.sendOrderConfirmationEmail(cleanEmail, order);
+                emailService.sendOrderConfirmationEmail(cleanEmail, buildEmailContext(order));
             } catch (Exception e) {
                 log.warn("Failed to dispatch manual order confirmation email to {}: {}", cleanEmail, e.getMessage());
             }
@@ -571,27 +566,7 @@ public class OrderServiceImpl implements OrderService {
             order.setPaymentStatus("REFUND_PENDING");
         }
 
-        List<OrderItem> items = orderItemRepository.findByOrderId(order.getId());
-        for (OrderItem oi : items) {
-            Product p = oi.getProduct();
-            if (oi.getVariant() != null) {
-                // Has an explicit variant — restore its stock
-                ProductVariant variant = oi.getVariant();
-                variant.setStock(variant.getStock() + oi.getQuantity());
-                productVariantRepository.save(variant);
-            } else if (p != null) {
-                // BUG FIX: No variant attached. Previously this branch restored stock to variants.get(0)
-                // which is WRONG — it would restore the wrong item's inventory.
-                // If the product has variants, we cannot safely restore (we don't know which variant was ordered).
-                // If the product has no variants (uses product-level stock), restore product stock.
-                if (p.getVariants() == null || p.getVariants().isEmpty()) {
-                    p.setStock(p.getStock() + oi.getQuantity());
-                    productRepository.save(p);
-                } else {
-                    log.warn("Cannot safely restore stock for order item {} — no variant attached but product has variants.", oi.getId());
-                }
-            }
-        }
+        restoreOrderStock(order);
 
         return mapToResponse(orderRepository.save(order));
     }
@@ -615,68 +590,61 @@ public class OrderServiceImpl implements OrderService {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
 
-        if (request.getStatus() != null && !request.getStatus().isBlank()) {
-            String newStatus = request.getStatus().toUpperCase();
-            if ("CANCELLED".equals(newStatus) && !"CANCELLED".equals(order.getStatus())) {
-                order.setStatus("CANCELLED");
-                if (request.getCancellationReason() != null && !request.getCancellationReason().isBlank()) {
-                    order.setCancellationReason(request.getCancellationReason().trim());
-                } else if (order.getCancellationReason() == null) {
-                    order.setCancellationReason("Cancelled by Store Administrator");
+        String newStatus = request.getStatus().toUpperCase();
+
+        if ("CANCELLED".equals(newStatus) && !"CANCELLED".equals(order.getStatus())) {
+            order.setStatus("CANCELLED");
+            if (request.getCancellationReason() != null && !request.getCancellationReason().isBlank()) {
+                order.setCancellationReason(request.getCancellationReason().trim());
+            } else if (order.getCancellationReason() == null) {
+                order.setCancellationReason("Cancelled by Store Administrator");
+            }
+            if ("PAID".equalsIgnoreCase(order.getPaymentStatus())) {
+                order.setPaymentStatus("REFUND_PENDING");
+            }
+            restoreOrderStock(order);
+            try {
+                OrderEmailContext cancelCtx = buildEmailContext(order);
+                emailService.sendOrderCancelledEmail(order.getUser().getEmail(), cancelCtx);
+                if (adminEmail != null && !adminEmail.isBlank()) {
+                    emailService.sendAdminOrderCancelledAlert(adminEmail, cancelCtx);
                 }
-                if ("PAID".equalsIgnoreCase(order.getPaymentStatus())) {
-                    order.setPaymentStatus("REFUND_PENDING");
-                }
-                // Replenish inventory
-                List<OrderItem> items = orderItemRepository.findByOrderId(order.getId());
-                for (OrderItem oi : items) {
-                    Product p = oi.getProduct();
-                    if (oi.getVariant() != null) {
-                        ProductVariant variant = oi.getVariant();
-                        variant.setStock(variant.getStock() + oi.getQuantity());
-                        productVariantRepository.save(variant);
-                    } else if (p != null && p.getVariants() != null && !p.getVariants().isEmpty()) {
-                        ProductVariant firstV = p.getVariants().get(0);
-                        firstV.setStock(firstV.getStock() + oi.getQuantity());
-                        productVariantRepository.save(firstV);
-                    }
-                }
+            } catch (Exception e) {
+                log.warn("Failed to send order cancellation email: {}", e.getMessage());
+            }
+        } else if (!"CANCELLED".equals(newStatus)) {
+            order.setStatus(newStatus);
+            if ("SHIPPED".equals(newStatus)) {
                 try {
-                    emailService.sendOrderCancelledEmail(order.getUser().getEmail(), order, order.getCancellationReason());
-                    if (adminEmail != null && !adminEmail.isBlank()) {
-                        emailService.sendAdminOrderCancelledAlert(adminEmail, order);
-                    }
+                    emailService.sendOrderShippedEmail(order.getUser().getEmail(), buildEmailContext(order));
                 } catch (Exception e) {
-                    log.warn("Failed to send order cancellation email: {}", e.getMessage());
+                    log.warn("Failed to send order shipped email: {}", e.getMessage());
                 }
-            } else {
-                order.setStatus(newStatus);
-                if ("SHIPPED".equals(newStatus)) {
-                    try {
-                        emailService.sendOrderShippedEmail(order.getUser().getEmail(), order);
-                    } catch (Exception e) {
-                        log.warn("Failed to send order shipped email: {}", e.getMessage());
-                    }
-                } else if ("DELIVERED".equals(newStatus)) {
-                    try {
-                        emailService.sendOrderDeliveredEmail(order.getUser().getEmail(), order);
-                    } catch (Exception e) {
-                        log.warn("Failed to send order delivered email: {}", e.getMessage());
-                    }
+            } else if ("DELIVERED".equals(newStatus)) {
+                try {
+                    emailService.sendOrderDeliveredEmail(order.getUser().getEmail(), buildEmailContext(order));
+                } catch (Exception e) {
+                    log.warn("Failed to send order delivered email: {}", e.getMessage());
                 }
             }
         }
 
-        if (request.getPaymentStatus() != null && !request.getPaymentStatus().isBlank()) {
-            order.setPaymentStatus(request.getPaymentStatus().toUpperCase());
-        }
-        if (request.getTrackingNumber() != null) {
+        return mapToResponse(orderRepository.save(order));
+    }
+
+    @Override
+    @Transactional
+    public OrderResponse adminUpdateShippingDetails(UUID orderId, ShippingDetailsUpdateRequest request) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+
+        if (request.getTrackingNumber() != null && !request.getTrackingNumber().isBlank()) {
             order.setTrackingNumber(request.getTrackingNumber().trim());
         }
-        if (request.getCourierPartner() != null) {
+        if (request.getCourierPartner() != null && !request.getCourierPartner().isBlank()) {
             order.setCourierPartner(request.getCourierPartner().trim());
         }
-        if (request.getTrackingUrl() != null) {
+        if (request.getTrackingUrl() != null && !request.getTrackingUrl().isBlank()) {
             order.setTrackingUrl(request.getTrackingUrl().trim());
         }
         if (request.getEstimatedDeliveryDate() != null && !request.getEstimatedDeliveryDate().isBlank()) {
@@ -688,16 +656,50 @@ public class OrderServiceImpl implements OrderService {
                     order.setEstimatedDeliveryDate(java.time.LocalDateTime.parse(edStr));
                 }
             } catch (Exception e) {
-                log.warn("Could not parse estimatedDeliveryDate: {}", request.getEstimatedDeliveryDate());
+                log.warn("Could not parse estimatedDeliveryDate '{}' for order {}", request.getEstimatedDeliveryDate(), orderId);
             }
         }
-        if (request.getCancellationReason() != null && !request.getCancellationReason().isBlank()) {
-            order.setCancellationReason(request.getCancellationReason().trim());
+
+        Order saved = orderRepository.save(order);
+
+        // If order is already SHIPPED and tracking was just added, re-send the shipped email
+        // so the customer gets the courier tracking info
+        if ("SHIPPED".equalsIgnoreCase(saved.getStatus()) && request.getTrackingNumber() != null && !request.getTrackingNumber().isBlank()) {
+            try {
+                emailService.sendOrderShippedEmail(saved.getUser().getEmail(), buildEmailContext(saved));
+                log.info("Re-sent shipped email with tracking details for order {}", saved.getOrderNumber());
+            } catch (Exception e) {
+                log.warn("Failed to re-send shipped email after tracking update: {}", e.getMessage());
+            }
         }
 
-        return mapToResponse(orderRepository.save(order));
+        return mapToResponse(saved);
     }
 
+    /**
+     * Builds an immutable {@link OrderEmailContext} from a live Order entity.
+     * MUST be called within an active @Transactional scope so all lazy associations
+     * (user, shippingAddress) can be accessed safely before the async thread fires.
+     *
+     * @param order the saved Order entity
+     * @return fully-resolved, thread-safe email context DTO
+     */
+    private OrderEmailContext buildEmailContext(Order order) {
+        // Eagerly fetch items via the dedicated repository query — avoids Hibernate
+        // lazy-load bag initialization which causes the IllegalStateException crash
+        // when accessed later in @Async email threads.
+        List<OrderItem> items = orderItemRepository.findByOrderId(order.getId());
+        return OrderEmailContext.from(order, items);
+    }
+
+    /**
+     * Admin payment approval — handles all payment types:
+     * - MANUAL / DIRECT_UPI: Admin verified UTR/screenshot → confirm payment
+     * - COD: Delivery collected cash → mark as received
+     * - MANUAL (admin-created order): Admin confirms payment added outside system
+     *
+     * Idempotent: calling twice on an already-PAID order is a no-op.
+     */
     @Override
     @Transactional
     @CacheEvict(value = {"products", "catalog", "categories"}, allEntries = true)
@@ -705,25 +707,135 @@ public class OrderServiceImpl implements OrderService {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with ID: " + orderId));
 
-        order.setPaymentStatus("PAID");
-        if ("PENDING".equalsIgnoreCase(order.getStatus())) {
-            order.setStatus("PROCESSING");
+        // Idempotency guard — approving an already-PAID order is a no-op
+        if ("PAID".equalsIgnoreCase(order.getPaymentStatus())) {
+            log.info("Payment approval skipped — order {} is already PAID", order.getOrderNumber());
+            return mapToResponse(order);
         }
 
+        // Mark payment as received
+        order.setPaymentStatus("PAID");
+
+        // Advance order status:
+        // PAYMENT_PROOF_SUBMITTED or PENDING → CONFIRMED
+        // COD orders in SHIPPED/DELIVERED stay in their delivery status — only paymentStatus changes
+        String currentStatus = order.getStatus() != null ? order.getStatus().toUpperCase() : "PENDING";
+        if ("PAYMENT_PROOF_SUBMITTED".equals(currentStatus) || "PENDING".equals(currentStatus)) {
+            order.setStatus("CONFIRMED");
+        }
+        // For COD: SHIPPED/DELIVERED orders keep their status; only paymentStatus changes to PAID
+
+        // Update linked transaction record to SUCCESS
         try {
             transactionRepository.findByOrderId(order.getId()).ifPresent(tx -> {
                 tx.setStatus("SUCCESS");
                 transactionRepository.save(tx);
             });
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            log.warn("Could not update transaction status for order {}: {}", orderId, e.getMessage());
+        }
+
+        // Deduct inventory — idempotent (guarded by isStockDeducted flag).
+        // COD orders already had stock deducted at order creation — this is a no-op for them.
+        deductOrderStock(order);
 
         Order saved = orderRepository.save(order);
+
+        // ---- Build email context SYNCHRONOUSLY inside the @Transactional boundary ----
+        // All lazy associations (user, shippingAddress, items → product) are resolved HERE
+        // before the @Async thread picks up the email task.
+        OrderEmailContext emailCtx;
         try {
-            emailService.sendOrderConfirmationEmail(order.getUser().getEmail(), order);
+            emailCtx = buildEmailContext(saved);
         } catch (Exception e) {
-            log.warn("Failed to send order confirmation email upon payment approval: {}", e.getMessage());
+            log.error("Could not build email context for order {} — emails skipped: {}",
+                    saved.getOrderNumber(), e.getMessage());
+            return mapToResponse(saved);
         }
+
+        // Notify customer — order confirmed + payment verified
+        if (emailCtx.getCustomerEmail() != null && !emailCtx.getCustomerEmail().isBlank()
+                && !emailCtx.getCustomerEmail().startsWith("guest_")) {
+            try {
+                emailService.sendOrderConfirmationEmail(emailCtx.getCustomerEmail(), emailCtx);
+            } catch (Exception e) {
+                log.warn("Customer confirmation email failed for order {}: {}",
+                        saved.getOrderNumber(), e.getMessage());
+            }
+        }
+
+        // Notify admin — payment approved confirmation
+        if (adminEmail != null && !adminEmail.isBlank()) {
+            try {
+                emailService.sendAdminPaymentApprovedAlert(adminEmail, emailCtx);
+                // High-value VIP alert
+                if (saved.getFinalAmount() != null
+                        && saved.getFinalAmount().compareTo(BigDecimal.valueOf(25000)) >= 0) {
+                    emailService.sendAdminVipOrderAlert(adminEmail, emailCtx);
+                }
+            } catch (Exception e) {
+                log.warn("Admin payment approval alert failed for order {}: {}",
+                        saved.getOrderNumber(), e.getMessage());
+            }
+        }
+
+        log.info("Payment approved for Order {} [method={}] by admin",
+                saved.getOrderNumber(), saved.getPaymentMethod());
         return mapToResponse(saved);
+    }
+
+    @Override
+    @Transactional
+    public void deductOrderStock(Order order) {
+        if (order == null || Boolean.TRUE.equals(order.getIsStockDeducted())) {
+            return; // Idempotent guard — prevent duplicate deduction
+        }
+        List<OrderItem> items = orderItemRepository.findByOrderId(order.getId());
+        for (OrderItem oi : items) {
+            Product p = oi.getProduct();
+            int qty = oi.getQuantity();
+            if (oi.getVariant() != null) {
+                ProductVariant variant = productVariantRepository.findByIdForUpdate(oi.getVariant().getId())
+                        .orElse(oi.getVariant());
+                variant.setStock(Math.max(0, variant.getStock() - qty));
+                productVariantRepository.save(variant);
+            } else if (p != null && p.getVariants() != null && !p.getVariants().isEmpty()) {
+                ProductVariant firstV = productVariantRepository.findByIdForUpdate(p.getVariants().get(0).getId())
+                        .orElse(p.getVariants().get(0));
+                firstV.setStock(Math.max(0, firstV.getStock() - qty));
+                productVariantRepository.save(firstV);
+            }
+        }
+        order.setIsStockDeducted(true);
+        orderRepository.save(order);
+        log.info("Inventory successfully deducted for Order: {}", order.getOrderNumber());
+    }
+
+    @Override
+    @Transactional
+    public void restoreOrderStock(Order order) {
+        if (order == null || !Boolean.TRUE.equals(order.getIsStockDeducted())) {
+            return; // Stock was never deducted, no restore needed
+        }
+        List<OrderItem> items = orderItemRepository.findByOrderId(order.getId());
+        for (OrderItem oi : items) {
+            Product p = oi.getProduct();
+            int qty = oi.getQuantity();
+            if (oi.getVariant() != null) {
+                ProductVariant variant = productVariantRepository.findByIdForUpdate(oi.getVariant().getId())
+                        .orElse(oi.getVariant());
+                variant.setStock(variant.getStock() + qty);
+                productVariantRepository.save(variant);
+            } else if (p != null && p.getVariants() != null && !p.getVariants().isEmpty()) {
+                ProductVariant firstV = productVariantRepository.findByIdForUpdate(p.getVariants().get(0).getId())
+                        .orElse(p.getVariants().get(0));
+                firstV.setStock(firstV.getStock() + qty);
+                productVariantRepository.save(firstV);
+            }
+        }
+        order.setIsStockDeducted(false);
+        orderRepository.save(order);
+        log.info("Inventory successfully restored for cancelled Order: {}", order.getOrderNumber());
     }
 
     @Override
@@ -744,23 +856,11 @@ public class OrderServiceImpl implements OrderService {
             });
         } catch (Exception ignored) {}
 
-        List<OrderItem> items = orderItemRepository.findByOrderId(order.getId());
-        for (OrderItem oi : items) {
-            Product p = oi.getProduct();
-            if (oi.getVariant() != null) {
-                ProductVariant variant = oi.getVariant();
-                variant.setStock(variant.getStock() + oi.getQuantity());
-                productVariantRepository.save(variant);
-            } else if (p != null && p.getVariants() != null && !p.getVariants().isEmpty()) {
-                ProductVariant firstV = p.getVariants().get(0);
-                firstV.setStock(firstV.getStock() + oi.getQuantity());
-                productVariantRepository.save(firstV);
-            }
-        }
+        restoreOrderStock(order);
 
         Order saved = orderRepository.save(order);
         try {
-            emailService.sendOrderCancelledEmail(order.getUser().getEmail(), order, order.getCancellationReason());
+            emailService.sendOrderCancelledEmail(saved.getUser().getEmail(), buildEmailContext(saved));
         } catch (Exception e) {
             log.warn("Failed to send order rejection email: {}", e.getMessage());
         }
@@ -772,6 +872,7 @@ public class OrderServiceImpl implements OrderService {
     public AdminDashboardResponse getAdminDashboardStats() {
         long totalOrders = orderRepository.count();
         long pendingOrders = orderRepository.countPendingOrders();
+        long pendingPaymentVerification = orderRepository.countByStatus("PAYMENT_PROOF_SUBMITTED");
         long deliveredOrders = orderRepository.countDeliveredOrders();
         BigDecimal totalRevenue = orderRepository.calculateTotalRevenue();
         if (totalRevenue == null) totalRevenue = BigDecimal.ZERO;
@@ -787,6 +888,7 @@ public class OrderServiceImpl implements OrderService {
         return AdminDashboardResponse.builder()
                 .totalOrders(totalOrders)
                 .pendingOrders(pendingOrders)
+                .pendingPaymentVerification(pendingPaymentVerification)
                 .deliveredOrders(deliveredOrders)
                 .totalRevenue(totalRevenue)
                 .totalProducts(totalProducts)
@@ -804,20 +906,8 @@ public class OrderServiceImpl implements OrderService {
         for (Order o : abandoned) {
             if ("PENDING".equalsIgnoreCase(o.getPaymentStatus()) && !"COD".equalsIgnoreCase(o.getPaymentMethod())) {
                 o.setStatus("CANCELLED");
+                restoreOrderStock(o);
                 orderRepository.save(o);
-                List<OrderItem> items = orderItemRepository.findByOrderId(o.getId());
-                for (OrderItem oi : items) {
-                    if (oi.getVariant() != null) {
-                        // BUG FIX: was using setStockQuantity() — inconsistent with rest of codebase
-                        // which uses setStock(). Both set stockQuantity field but setStock() is the
-                        // canonical setter defined in ProductVariant entity.
-                        ProductVariant v = oi.getVariant();
-                        v.setStock(v.getStock() + oi.getQuantity());
-                        productVariantRepository.save(v);
-                    }
-                    // BUG FIX: removed the previous productRepository.save(p) — it saved the
-                    // product entity with NO changes made to it, which was a needless DB write.
-                }
             }
         }
         log.info("Processed {} abandoned orders", abandoned.size());

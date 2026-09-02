@@ -3,6 +3,7 @@ package com.pmrgsolution.features.order.controller;
 import com.pmrgsolution.features.order.dto.AdminDashboardResponse;
 import com.pmrgsolution.features.order.dto.OrderResponse;
 import com.pmrgsolution.features.order.dto.OrderStatusUpdateRequest;
+import com.pmrgsolution.features.order.dto.ShippingDetailsUpdateRequest;
 import com.pmrgsolution.features.order.service.OrderService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +37,11 @@ public class AdminOrderController {
         return ResponseEntity.ok(orderService.getOrderByIdAdmin(orderId));
     }
 
+    /**
+     * Updates order lifecycle status only.
+     * Valid values: CONFIRMED, PROCESSING, SHIPPED, DELIVERED, CANCELLED
+     * For courier/tracking details use PUT /{orderId}/shipping
+     */
     @PutMapping("/{orderId}/status")
     public ResponseEntity<OrderResponse> updateOrderStatus(
             @PathVariable UUID orderId,
@@ -43,18 +49,39 @@ public class AdminOrderController {
         return ResponseEntity.ok(orderService.adminUpdateOrderStatus(orderId, request));
     }
 
+    /**
+     * Updates courier/tracking details only — does NOT change order status.
+     * Call this after marking status as SHIPPED to add tracking number, courier partner, etc.
+     * If tracking is added to an already SHIPPED order, the customer receives an updated shipping email.
+     */
+    @PutMapping("/{orderId}/shipping")
+    public ResponseEntity<OrderResponse> updateShippingDetails(
+            @PathVariable UUID orderId,
+            @RequestBody ShippingDetailsUpdateRequest request) {
+        return ResponseEntity.ok(orderService.adminUpdateShippingDetails(orderId, request));
+    }
+
+    /**
+     * Approves a manual UPI/bank payment proof submitted by the customer.
+     * Sets paymentStatus=PAID, order status=CONFIRMED, sends confirmation email to customer,
+     * and sends new order alert to admin.
+     */
     @PostMapping("/{orderId}/approve")
     public ResponseEntity<OrderResponse> approvePayment(@PathVariable UUID orderId) {
         return ResponseEntity.ok(orderService.approveManualPaymentAdmin(orderId));
     }
 
+    /**
+     * Rejects a manual payment proof — order is CANCELLED, customer is notified.
+     */
     @PostMapping("/{orderId}/reject")
     public ResponseEntity<OrderResponse> rejectPayment(@PathVariable UUID orderId) {
         return ResponseEntity.ok(orderService.rejectManualPaymentAdmin(orderId));
     }
 
     @PostMapping("/manual")
-    public ResponseEntity<OrderResponse> createManualOrder(@Valid @RequestBody com.pmrgsolution.features.order.dto.AdminManualOrderRequest request) {
+    public ResponseEntity<OrderResponse> createManualOrder(
+            @Valid @RequestBody com.pmrgsolution.features.order.dto.AdminManualOrderRequest request) {
         return ResponseEntity.ok(orderService.createAdminManualOrder(request));
     }
 

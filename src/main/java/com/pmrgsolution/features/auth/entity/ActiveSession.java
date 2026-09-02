@@ -24,7 +24,8 @@ import lombok.Setter;
     name = "active_sessions",
     indexes = {
         @jakarta.persistence.Index(name = "idx_session_id", columnList = "session_id"),
-        @jakarta.persistence.Index(name = "idx_session_refresh_token", columnList = "refresh_token")
+        @jakarta.persistence.Index(name = "idx_session_refresh_token", columnList = "refresh_token"),
+        @jakarta.persistence.Index(name = "idx_session_prev_refresh_token", columnList = "previous_refresh_token")
     }
 )
 @Getter
@@ -50,6 +51,12 @@ public class ActiveSession {
 
     @Column(name = "refresh_token_expiry")
     private LocalDateTime refreshTokenExpiry;
+
+    @Column(name = "previous_refresh_token", columnDefinition = "TEXT")
+    private String previousRefreshToken;
+
+    @Column(name = "previous_refresh_token_expiry")
+    private LocalDateTime previousRefreshTokenExpiry;
 
     @Column(name = "device_id", columnDefinition = "TEXT")
     private String deviceId;

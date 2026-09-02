@@ -3,22 +3,29 @@
 <body>
   <div th:replace="~{email/layout/base-layout :: main(~{::#deliveredContent})}">
     <div id="deliveredContent">
-      <div style="text-align: center; margin-bottom: 25px;">
-        <div style="display: inline-block; padding: 6px 16px; background-color: #e8f8f0; color: #27ae60; border-radius: 20px; font-weight: 700; font-size: 13px;">DELIVERED</div>
-        <h2 style="color: #7b121c; margin: 10px 0 5px; font-family: Georgia, serif;">Your Handloom Saree Has Arrived! ✨</h2>
-        <p style="color: #666; margin: 0; font-size: 14px;">Order Reference: <strong th:text="${orderNumber}">SK-2026-0001</strong></p>
+      <div style="text-align: center; margin-bottom: 26px;">
+        <div style="display: inline-block; padding: 4px 16px; background-color: #ECFDF5; color: #059669; border: 1px solid #A7F3D0; border-radius: 20px; font-weight: 700; font-size: 11.5px; letter-spacing: 1px; text-transform: uppercase;">
+          ✨ Delivered Successfully
+        </div>
+        <h2 style="color: #800020; margin: 12px 0 6px; font-family: 'Playfair Display', Georgia, serif; font-size: 23px;">Your Handloom Saree Has Arrived!</h2>
+        <p style="color: #7A6F68; margin: 0; font-size: 13.5px;">Order Reference: <strong style="color: #221D1B;" th:text="${orderNumber}">SK-2026-0001</strong></p>
       </div>
 
-      <p>Namaste <strong th:text="${customerName}">Valued Customer</strong>,</p>
-      <p>Your order <strong th:text="${orderNumber}">SK-2026-0001</strong> has been successfully delivered to your doorstep. We hope you cherish the authentic artistry woven into every thread.</p>
+      <p>Namaste <strong th:text="${customerName}">Valued Patron</strong>,</p>
+      <p>Your package has been successfully delivered. We hope you cherish the authentic heritage, pure silk fibers, and exquisite craftsmanship woven into every thread.</p>
 
-      <div style="background-color: #fdfaf0; border: 1px solid #d4af37; border-radius: 8px; padding: 20px; margin: 25px 0; text-align: center;">
-        <h4 style="margin: 0 0 10px; color: #7b121c; font-size: 16px; font-family: Georgia, serif;">Share Your Experience</h4>
-        <p style="margin: 0 0 15px; font-size: 13.5px; color: #555;">How does your new saree feel? Your review helps fellow patrons discover authentic Indian handlooms.</p>
-        <a th:href="${reviewUrl ?: 'https://www.shreekamalinee.com/account/orders'}" target="_blank" style="display: inline-block; padding: 10px 24px; background-color: #d4af37; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 700; font-size: 13.5px;">RATE & REVIEW YOUR SAREE ★★★★★</a>
+      <!-- Review & Experience Card -->
+      <div style="background-color: #FAF7F2; border: 1px solid #D6A23F; border-radius: 10px; padding: 24px 20px; margin: 26px 0; text-align: center; box-shadow: 0 4px 16px rgba(214,162,63,0.12);">
+        <h4 style="margin: 0 0 8px; color: #800020; font-size: 16px; font-weight: 700; font-family: 'Playfair Display', Georgia, serif;">Celebrate Your Saree Experience</h4>
+        <p style="margin: 0 0 18px; font-size: 13px; color: #6E5D53; line-height: 1.6;">How does your handcrafted saree drape? Share your review and star rating to celebrate our weaver artisans.</p>
+        <a th:href="${reviewUrl ?: ((supportUrl ?: 'https://www.shreekamalinee.com') + '/account/orders')}" target="_blank" class="cta-btn">
+          WRITE REVIEW & RATE STARS ★★★★★
+        </a>
       </div>
 
-      <p style="color: #777; font-size: 13px;">If you have any questions regarding saree drape care or maintenance, reach out to our handloom care specialists at support@shreekamalinee.com.</p>
+      <div style="background-color: #FFFDF9; border: 1px solid #EADBCE; border-radius: 6px; padding: 14px 16px; font-size: 12.5px; color: #6E5D53; line-height: 1.5; margin-top: 20px;">
+        <strong>💡 Handloom Care Recommendation:</strong> For long-lasting sheen and zari preservation, dry clean your pure silk ensembles and store wrapped in muslin cloth away from direct moisture.
+      </div>
     </div>
   </div>
 </body>

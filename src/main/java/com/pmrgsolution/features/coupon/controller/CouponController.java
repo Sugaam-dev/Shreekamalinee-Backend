@@ -53,8 +53,11 @@ public class CouponController {
     public ResponseEntity<CouponValidationResponse> validateCoupon(
             @RequestParam("code") String code,
             @RequestParam(value = "subtotal", required = false) BigDecimal subtotal,
+            @RequestParam(value = "userEmail", required = false) String userEmail,
+            @RequestParam(value = "email", required = false) String email,
             @AuthenticationPrincipal CustomUserDetails user) {
+        String targetEmail = userEmail != null && !userEmail.isBlank() ? userEmail : email;
         UUID userId = user != null ? user.getId() : null;
-        return ResponseEntity.ok(couponService.validateCoupon(code, subtotal, userId));
+        return ResponseEntity.ok(couponService.validateCoupon(code, subtotal, userId, targetEmail));
     }
 }

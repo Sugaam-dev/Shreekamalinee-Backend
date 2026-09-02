@@ -3,14 +3,25 @@
 <body>
   <div th:replace="~{email/layout/base-layout :: main(~{::#adminCancelledContent})}">
     <div id="adminCancelledContent">
-      <div style="background-color: #fbebee; border-left: 4px solid #c0392b; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
-        <strong style="color: #c0392b; font-size: 16px;">🛑 ORDER CANCELLED BY <span th:text="${#strings.toUpperCase(customerName)}">CUSTOMER</span>: <span th:text="${orderNumber}">SK-2026-0001</span></strong>
+      <div style="text-align: center; margin-bottom: 24px;">
+        <div style="display: inline-block; padding: 4px 16px; background-color: #FFF1F2; color: #E11D48; border: 1px solid #FECDD3; border-radius: 20px; font-weight: 700; font-size: 11.5px; letter-spacing: 1px; text-transform: uppercase;">
+          🛑 Order Cancelled
+        </div>
+        <h2 style="color: #800020; margin: 12px 0 6px; font-family: 'Playfair Display', Georgia, serif; font-size: 22px;">Order Cancelled: <span th:text="${orderNumber}">SK-2026-0001</span></h2>
+        <p style="color: #7A6F68; margin: 0; font-size: 13.5px;">Customer: <strong style="color: #221D1B;" th:text="${customerName}">Patron Name</strong></p>
       </div>
-      <p>Order <strong th:text="${orderNumber}">SK-2026-0001</strong> (Net Amount: <strong th:text="${finalTotalFormatted}">₹0.00</strong>) has been cancelled.</p>
-      <p><strong>Warehouse Notice:</strong> Do NOT dispatch this order. Locked inventory stock has been automatically returned to store inventory.</p>
 
-      <div style="margin-top: 20px; text-align: center;">
-        <a th:href="${adminOrderUrl ?: 'https://www.shreekamalinee.com/admin/orders'}" target="_blank" style="display: inline-block; padding: 12px 24px; background-color: #7b121c; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 700;">VIEW IN ADMIN PANEL →</a>
+      <div style="background-color: #FAF7F2; border: 1px solid #EADBCE; border-radius: 8px; padding: 18px 20px; margin-bottom: 22px; font-size: 13.5px;">
+        <div>Order Amount: <strong style="color: #800020;" th:text="${finalTotalFormatted}">₹0.00</strong></div>
+        <div style="margin-top: 6px; color: #E11D48; font-weight: 700;">
+          📦 Warehouse Notice: Do NOT dispatch parcel. Reserved items have been returned to active stock.
+        </div>
+      </div>
+
+      <div style="margin-top: 26px; text-align: center;">
+        <a th:href="${adminOrderUrl ?: ((supportUrl ?: 'https://www.shreekamalinee.com') + '/admin/orders')}" target="_blank" class="cta-btn">
+          VIEW ORDER DETAILS IN ADMIN →
+        </a>
       </div>
     </div>
   </div>

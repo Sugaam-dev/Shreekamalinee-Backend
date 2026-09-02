@@ -45,8 +45,12 @@ public class AdminManualOrderRequest {
 
     private String couponCode;
 
+    @jakarta.validation.constraints.Pattern(
+            regexp = "^(?!.*(?i)razorpay).*$",
+            message = "Razorpay is not supported for manual admin orders. Please select WHATSAPP_UPI, DIRECT_BANK, or COD."
+    )
     @Builder.Default
-    private String paymentMethod = "WHATSAPP_UPI"; // WHATSAPP_UPI, DIRECT_BANK, COD
+    private String paymentMethod = "WHATSAPP_UPI"; // Supported: WHATSAPP_UPI, DIRECT_BANK, COD
 
     @Builder.Default
     private String paymentStatus = "PAID"; // PAID, PENDING

@@ -17,6 +17,7 @@ public class BankingSettingsRequest {
     private Boolean isUpiPaymentActive;
     private Boolean isRazorpayPaymentActive;
     private Boolean isCodPaymentActive;
+    private Boolean isWhatsappOrderActive;
     private Integer estimatedDeliveryDaysMin;
     private Integer estimatedDeliveryDaysMax;
     private Integer returnWindowDays;

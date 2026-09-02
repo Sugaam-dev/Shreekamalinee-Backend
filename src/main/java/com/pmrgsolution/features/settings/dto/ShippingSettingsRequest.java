@@ -12,6 +12,7 @@ public class ShippingSettingsRequest {
     private BigDecimal freeShippingThreshold;
     private BigDecimal standardShippingFee;
     private BigDecimal codHandlingFee;
+    private BigDecimal freeCodThreshold;
     private Boolean isFreeShippingPromoActive;
     private Integer estimatedDeliveryDaysMin;
     private Integer estimatedDeliveryDaysMax;

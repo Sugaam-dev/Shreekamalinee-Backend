@@ -13,6 +13,8 @@ import com.pmrgsolution.features.auth.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import org.springframework.jdbc.core.JdbcTemplate;
+
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -20,6 +22,7 @@ public class DataLoader implements CommandLineRunner {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final JdbcTemplate jdbcTemplate;
 
     @Value("${app.admin.email:admin@shreekamalinee.com}")
     private String adminEmail;
@@ -29,6 +32,29 @@ public class DataLoader implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
+        // ---- 1. CLEANUP LEGACY DB CONSTRAINTS ON CATEGORY SLUG (RUNS ONLY IF LEGACY CONSTRAINTS EXIST) ----
+        try {
+            Integer legacyCount = jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM information_schema.table_constraints " +
+                    "WHERE table_name = 'categories' AND constraint_type = 'UNIQUE' " +
+                    "  AND constraint_name != 'uq_category_slug_parent' AND constraint_name != 'categories_pkey'",
+                    Integer.class);
+
+            if (legacyCount != null && legacyCount > 0) {
+                jdbcTemplate.execute("DO $$ DECLARE r RECORD; BEGIN " +
+                        "FOR r IN (SELECT constraint_name FROM information_schema.table_constraints " +
+                        "          WHERE table_name = 'categories' AND constraint_type = 'UNIQUE' " +
+                        "            AND constraint_name != 'uq_category_slug_parent' AND constraint_name != 'categories_pkey') LOOP " +
+                        "  EXECUTE 'ALTER TABLE categories DROP CONSTRAINT IF EXISTS ' || quote_ident(r.constraint_name); " +
+                        "END LOOP; " +
+                        "END $$;");
+                log.info("Migration: Successfully removed {} legacy category unique constraint(s)", legacyCount);
+            }
+        } catch (Exception e) {
+            log.debug("Category constraint migration check: {}", e.getMessage());
+        }
+
+        // ---- 2. INITIALIZE SUPERADMIN ACCOUNT ----
         if (adminEmail == null || adminEmail.isBlank() || adminPassword == null || adminPassword.isBlank()) {
             log.warn("Initial Admin credentials not configured in environment. Skipping admin creation.");
             return;

@@ -223,4 +223,73 @@ class AuthServiceImplTest {
         assertThat(resp.getEmail()).isEqualTo("priya@test.com");
         assertThat(activeUser.isEnabled()).isTrue();
     }
+
+    // ─────────────────── REFRESH TOKEN TESTS ────────────────────
+
+    @Test
+    @DisplayName("refreshToken_success_rotatesTokensAndSetsGracePeriod")
+    void refreshToken_success_rotatesTokens() {
+        String oldRefreshToken = "valid-refresh-token";
+        ActiveSession session = ActiveSession.builder()
+                .sessionId(UUID.randomUUID())
+                .refreshToken(oldRefreshToken)
+                .refreshTokenExpiry(LocalDateTime.now().plusDays(7))
+                .user(activeUser)
+                .build();
+
+        when(jwtUtils.validateJwtToken(oldRefreshToken)).thenReturn(true);
+        when(sessionRepository.findByRefreshToken(oldRefreshToken)).thenReturn(Optional.of(session));
+        when(jwtUtils.generateRefreshToken(eq(activeUser.getEmail()), anyString())).thenReturn("new-rotated-refresh-token");
+        when(jwtUtils.generateToken(eq(activeUser.getEmail()), anyString())).thenReturn("new-access-token");
+        when(sessionRepository.save(any(ActiveSession.class))).thenReturn(session);
+
+        TokenRefreshResponse response = authService.refreshToken(oldRefreshToken);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getAccessToken()).isEqualTo("new-access-token");
+        assertThat(response.getRefreshToken()).isEqualTo("new-rotated-refresh-token");
+        assertThat(session.getPreviousRefreshToken()).isEqualTo(oldRefreshToken);
+        assertThat(session.getPreviousRefreshTokenExpiry()).isNotNull();
+        assertThat(session.getPreviousRefreshTokenExpiry()).isAfter(LocalDateTime.now());
+        verify(sessionRepository).save(session);
+    }
+
+    @Test
+    @DisplayName("refreshToken_gracePeriod_successForConcurrentRequest")
+    void refreshToken_gracePeriod_success() {
+        String prevRefreshToken = "just-rotated-token";
+        String currentRefreshToken = "already-active-rotated-token";
+        ActiveSession session = ActiveSession.builder()
+                .sessionId(UUID.randomUUID())
+                .refreshToken(currentRefreshToken)
+                .refreshTokenExpiry(LocalDateTime.now().plusDays(7))
+                .previousRefreshToken(prevRefreshToken)
+                .previousRefreshTokenExpiry(LocalDateTime.now().plusSeconds(25))
+                .user(activeUser)
+                .build();
+
+        when(jwtUtils.validateJwtToken(prevRefreshToken)).thenReturn(true);
+        when(sessionRepository.findByRefreshToken(prevRefreshToken)).thenReturn(Optional.empty());
+        when(sessionRepository.findByPreviousRefreshToken(prevRefreshToken)).thenReturn(Optional.of(session));
+        when(jwtUtils.generateToken(eq(activeUser.getEmail()), anyString())).thenReturn("new-access-token");
+
+        TokenRefreshResponse response = authService.refreshToken(prevRefreshToken);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getAccessToken()).isEqualTo("new-access-token");
+        assertThat(response.getRefreshToken()).isEqualTo(currentRefreshToken);
+    }
+
+    @Test
+    @DisplayName("refreshToken_invalidToken_throwsUnauthorized")
+    void refreshToken_invalidToken_throws() {
+        String invalidToken = "invalid-token";
+        when(jwtUtils.validateJwtToken(invalidToken)).thenReturn(true);
+        when(sessionRepository.findByRefreshToken(invalidToken)).thenReturn(Optional.empty());
+        when(sessionRepository.findByPreviousRefreshToken(invalidToken)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> authService.refreshToken(invalidToken))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getStatus()).isEqualTo(HttpStatus.UNAUTHORIZED));
+    }
 }

@@ -3,23 +3,44 @@
 <body>
   <div th:replace="~{email/layout/base-layout :: main(~{::#shippedContent})}">
     <div id="shippedContent">
-      <div style="text-align: center; margin-bottom: 25px;">
-        <div style="display: inline-block; padding: 6px 16px; background-color: #fef5e7; color: #d35400; border-radius: 20px; font-weight: 700; font-size: 13px;">DISPATCHED & IN TRANSIT</div>
-        <h2 style="color: #7b121c; margin: 10px 0 5px; font-family: Georgia, serif;">Your Saree is on Its Way! 🚚</h2>
-        <p style="color: #666; margin: 0; font-size: 14px;">Order Reference: <strong th:text="${orderNumber}">SK-2026-0001</strong></p>
+      <div style="text-align: center; margin-bottom: 26px;">
+        <div style="display: inline-block; padding: 4px 16px; background-color: #EFF6FF; color: #2563EB; border: 1px solid #BFDBFE; border-radius: 20px; font-weight: 700; font-size: 11.5px; letter-spacing: 1px; text-transform: uppercase;">
+          🚚 Dispatched & In Transit
+        </div>
+        <h2 style="color: #800020; margin: 12px 0 6px; font-family: 'Playfair Display', Georgia, serif; font-size: 23px;">Your Handloom Parcel Has Been Dispatched!</h2>
+        <p style="color: #7A6F68; margin: 0; font-size: 13.5px;">Order Reference: <strong style="color: #221D1B;" th:text="${orderNumber}">SK-2026-0001</strong></p>
       </div>
 
-      <p>Namaste <strong th:text="${customerName}">Valued Customer</strong>,</p>
-      <p>Exciting news! Your luxury handloom saree has been securely packaged and dispatched via <strong th:text="${courierName}">BlueDart Express</strong>.</p>
+      <p>Namaste <strong th:text="${customerName}">Valued Patron</strong>,</p>
+      <p>Your handcrafted ensemble has passed final weaving quality inspection and has been handed over to our trusted courier partner for priority transit.</p>
 
-      <div style="background-color: #fafafa; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px; margin: 25px 0; text-align: center;">
-        <div style="font-size: 14px; color: #555; margin-bottom: 6px;">Courier Partner: <strong th:text="${courierName}">BlueDart</strong></div>
-        <div style="font-size: 14px; color: #555; margin-bottom: 6px;">AWB / Tracking Number: <strong style="color: #7b121c;" th:text="${trackingNumber}">AWB123456</strong></div>
-        <div style="font-size: 14px; color: #555; margin-bottom: 18px;">Estimated Delivery Date: <strong th:text="${estimatedDeliveryDate}">3-5 Business Days</strong></div>
-        <a th:href="${trackingUrl ?: 'https://www.shreekamalinee.com/account/orders'}" target="_blank" style="display: inline-block; padding: 12px 28px; background-color: #7b121c; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 700; font-size: 14px; letter-spacing: 0.5px;">TRACK YOUR PARCEL NOW →</a>
+      <!-- Courier Dispatch Tracking Card -->
+      <div style="background-color: #FAF7F2; border: 1px solid #EADBCE; border-radius: 10px; padding: 22px 20px; margin: 26px 0; text-align: center; box-shadow: 0 4px 14px rgba(34,29,27,0.04);">
+        <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-bottom: 18px; font-size: 13.5px; text-align: left;">
+          <tr>
+            <td style="padding: 6px 0; color: #7A6F68; width: 140px;">Courier Partner:</td>
+            <td style="padding: 6px 0; font-weight: 700; color: #221D1B;" th:text="${courierName}">BlueDart Express</td>
+          </tr>
+          <tr>
+            <td style="padding: 6px 0; color: #7A6F68;">Consignment / AWB:</td>
+            <td style="padding: 6px 0;">
+              <span style="display: inline-block; padding: 3px 10px; background-color: #FFFFFF; border: 1px solid #D6A23F; border-radius: 4px; font-family: 'Courier New', Courier, monospace; font-weight: 700; color: #800020; font-size: 13px;" th:text="${trackingNumber}">AWB9876543210</span>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 6px 0; color: #7A6F68;">Estimated Delivery:</td>
+            <td style="padding: 6px 0; font-weight: 700; color: #059669;" th:text="${estimatedDeliveryDate}">3 - 5 Business Days</td>
+          </tr>
+        </table>
+
+        <a th:href="${trackingUrl ?: ((supportUrl ?: 'https://www.shreekamalinee.com') + '/account/orders')}" target="_blank" class="cta-btn">
+          TRACK CONSIGNMENT LIVE →
+        </a>
       </div>
 
-      <p style="color: #777; font-size: 13px;">Our courier partner will deliver the package directly to your doorstep. Please ensure someone is available at the delivery address.</p>
+      <p style="color: #7A6F68; font-size: 12.5px; text-align: center; margin-top: 20px;">
+        Our courier partner will deliver the package directly to your specified address. Please keep your phone reachable for courier delivery coordination.
+      </p>
     </div>
   </div>
 </body>

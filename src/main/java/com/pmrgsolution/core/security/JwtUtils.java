@@ -30,10 +30,10 @@ public class JwtUtils {
     @Value("${shreekamalinee.jwt.secret}")
     private String jwtSecret;
 
-    @Value("${shreekamalinee.jwt.expirationMs}")
+    @Value("${shreekamalinee.jwt.expirationMs:900000}")
     private int jwtExpirationMs;
 
-    @Value("${shreekamalinee.jwt.refreshExpirationMs:604800000}")
+    @Value("${shreekamalinee.jwt.refreshExpirationMs:7776000000}")
     private long jwtRefreshExpirationMs;
 
     private Key key;
@@ -44,7 +44,29 @@ public class JwtUtils {
      */
     @PostConstruct
     public void init() {
-        byte[] keyBytes = Decoders.BASE64.decode(jwtSecret);
+        if (jwtSecret == null || jwtSecret.trim().isEmpty()) {
+            throw new IllegalStateException(
+                "JWT Secret is missing! Please configure JWT_SECRET in your .env file or environment variables."
+            );
+        }
+        byte[] keyBytes;
+        try {
+            keyBytes = Decoders.BASE64.decode(jwtSecret.trim());
+            if (keyBytes == null || keyBytes.length < 64) {
+                keyBytes = jwtSecret.trim().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            }
+        } catch (Exception e) {
+            keyBytes = jwtSecret.trim().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        }
+
+        // Ensure minimum 512 bits (64 bytes) for HS512 cryptographic strength
+        if (keyBytes.length < 64) {
+            try {
+                java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-512");
+                keyBytes = digest.digest(keyBytes);
+            } catch (Exception ignored) {}
+        }
+
         this.key = Keys.hmacShaKeyFor(keyBytes);
         this.jwtParser = Jwts.parser()
                 .setSigningKey(key)
@@ -104,16 +126,16 @@ public class JwtUtils {
         try {
             jwtParser.parseClaimsJws(authToken);
             return true;
-        } catch (MalformedJwtException e) {
-            log.error("Invalid JWT token: {}", e.getMessage());
         } catch (ExpiredJwtException e) {
-            log.error("JWT token is expired: {}", e.getMessage());
+            log.debug("JWT token is expired: {}", e.getMessage());
+        } catch (MalformedJwtException e) {
+            log.warn("Invalid JWT token: {}", e.getMessage());
         } catch (UnsupportedJwtException e) {
-            log.error("JWT token is unsupported: {}", e.getMessage());
+            log.warn("JWT token is unsupported: {}", e.getMessage());
         } catch (IllegalArgumentException e) {
-            log.error("JWT claims string is empty: {}", e.getMessage());
+            log.warn("JWT claims string is empty: {}", e.getMessage());
         } catch (SignatureException e) {
-            log.error("Invalid JWT signature: {}", e.getMessage());
+            log.warn("Invalid JWT signature: {}", e.getMessage());
         }
         return false;
     }

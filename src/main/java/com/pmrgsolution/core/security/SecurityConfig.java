@@ -34,7 +34,7 @@ public class SecurityConfig {
     private final LogoutService logoutService;
     private final UserDetailsService userDetailsService;
 
-    @org.springframework.beans.factory.annotation.Value("${app.cors.allowed-origins:http://localhost:3000,http://localhost:5173,https://renaissance-zeta.vercel.app}")
+    @org.springframework.beans.factory.annotation.Value("${app.cors.allowed-origins:http://localhost:5173,http://localhost:3000}")
     private List<String> allowedOrigins;
 
     // --- 1. PASSWORD ENCODER BEAN ---
@@ -96,7 +96,7 @@ public class SecurityConfig {
                         "/api/v1/coupons/validate",
                         "/api/v1/orders/coupons/validate"
                 ).permitAll()
-                .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/catalog/**", "/api/v1/settings/**").permitAll()
+                .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/catalog/**", "/api/v1/settings/**", "/uploads/**").permitAll()
 
                 .requestMatchers("/actuator/**", "/api/admin/**", "/api/v1/admin/**").hasAnyRole("ADMIN", "SUPERADMIN")
 
@@ -120,11 +120,18 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(allowedOrigins);
-        configuration.setAllowedMethods(Arrays.asList("GET","POST","PUT","PATCH","DELETE","OPTIONS"));
-        configuration.setAllowedHeaders(Arrays.asList("Content-Type","Authorization","x-auth-token","Accept","Idempotency-Key"));
+        List<String> cleanedOrigins = (allowedOrigins != null)
+                ? allowedOrigins.stream().map(String::trim).filter(s -> !s.isEmpty()).toList()
+                : List.of("http://localhost:5173", "http://localhost:3000");
+        configuration.setAllowedOrigins(cleanedOrigins);
+        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"));
+        configuration.setAllowedHeaders(Arrays.asList(
+                "Content-Type", "Authorization", "x-auth-token", "Accept", "Idempotency-Key",
+                "Origin", "X-Requested-With", "Access-Control-Request-Method", "Access-Control-Request-Headers"
+        ));
         configuration.setAllowCredentials(true);
-        configuration.setExposedHeaders(List.of("Set-Cookie", "x-rate-limit-remaining", "x-rate-limit-retry-after"));
+        configuration.setExposedHeaders(List.of("Set-Cookie", "x-rate-limit-remaining", "x-rate-limit-retry-after", "Authorization"));
+        configuration.setMaxAge(3600L);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
 

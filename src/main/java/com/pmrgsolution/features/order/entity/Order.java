@@ -94,6 +94,10 @@ public class Order {
     @Column(name = "cancellation_reason", columnDefinition = "TEXT")
     private String cancellationReason;
 
+    @Column(name = "is_stock_deducted")
+    @Builder.Default
+    private Boolean isStockDeducted = false;
+
     @CreationTimestamp
     private LocalDateTime createdAt;
 

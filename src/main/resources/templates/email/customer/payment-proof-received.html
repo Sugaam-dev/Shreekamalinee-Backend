@@ -3,29 +3,49 @@
 <body>
   <div th:replace="~{email/layout/base-layout :: main(~{::#proofContent})}">
     <div id="proofContent">
-      <div style="text-align: center; margin-bottom: 25px;">
-        <div style="display: inline-block; padding: 6px 16px; background-color: #e8f8f0; color: #27ae60; border-radius: 20px; font-weight: 700; font-size: 13px;">PAYMENT PROOF SUBMITTED</div>
-        <h2 style="color: #7b121c; margin: 10px 0 5px; font-family: Georgia, serif;">Payment Proof Received & Under Review ⏳</h2>
-        <p style="color: #666; margin: 0; font-size: 14px;">Order Reference: <strong th:text="${orderNumber}">SK-2026-0001</strong></p>
+      <div style="text-align: center; margin-bottom: 26px;">
+        <div style="display: inline-block; padding: 4px 16px; background-color: #FFFBEB; color: #D97706; border: 1px solid #FDE68A; border-radius: 20px; font-weight: 700; font-size: 11.5px; letter-spacing: 1px; text-transform: uppercase;">
+          ⏳ Verification Pending
+        </div>
+        <h2 style="color: #800020; margin: 12px 0 6px; font-family: 'Playfair Display', Georgia, serif; font-size: 23px;">Payment Proof Under Review</h2>
+        <p style="color: #7A6F68; margin: 0; font-size: 13.5px;">Order Reference: <strong style="color: #221D1B;" th:text="${orderNumber}">SK-2026-0001</strong></p>
       </div>
 
       <p>Namaste <strong th:text="${customerName}">Valued Patron</strong>,</p>
-      <p>Thank you for submitting your payment proof. We have received your UPI transfer receipt for order <strong th:text="${orderNumber}">SK-2026-0001</strong>.</p>
+      <p>We have successfully received your payment screenshot / UTR receipt for order <strong style="color: #221D1B;" th:text="${orderNumber}">SK-2026-0001</strong>. Our accounts desk is verifying the credit with our banking channel.</p>
 
-      <div style="background-color: #fcfbf9; border: 1px solid #e8e2d9; border-radius: 8px; padding: 18px; margin: 20px 0; font-size: 14px; color: #444;">
-        <div style="margin-bottom: 6px;">• <strong>Order Reference:</strong> <span th:text="${orderNumber}">SK-2026-0001</span></div>
-        <div style="margin-bottom: 6px;">• <strong>UTR / Reference ID:</strong> <span style="font-family: monospace; font-weight: 700; color: #7b121c;" th:text="${utrNumber}">Submitted via Screenshot</span></div>
-        <div>• <strong>Verification Status:</strong> <span style="color: #d35400; font-weight: 700;">Under Verification (Finance Team)</span></div>
+      <!-- Transaction Snapshot Card -->
+      <div style="background-color: #FAF7F2; border: 1px solid #EADBCE; border-radius: 8px; padding: 18px 20px; margin: 22px 0; font-size: 13.5px;">
+        <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0">
+          <tr>
+            <td style="padding: 5px 0; color: #7A6F68; width: 140px;">Order Reference:</td>
+            <td style="padding: 5px 0; font-weight: 700; color: #221D1B;" th:text="${orderNumber}">SK-2026-0001</td>
+          </tr>
+          <tr>
+            <td style="padding: 5px 0; color: #7A6F68;">UTR / Transaction:</td>
+            <td style="padding: 5px 0;">
+              <strong style="color: #800020; font-family: 'Courier New', Courier, monospace; font-size: 13px;" th:text="${utrNumber}">Submitted via Screenshot</strong>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 5px 0; color: #7A6F68;">Review Status:</td>
+            <td style="padding: 5px 0; font-weight: 700; color: #D97706;">Finance Team Verification in Progress</td>
+          </tr>
+        </table>
       </div>
 
       <!-- Financial & Cost Breakdown Fragment -->
       <div th:replace="~{email/components/price-breakdown :: breakdown}"></div>
 
-      <p>Our accounting team will verify your transaction against our bank statement shortly (usually within 1–2 hours). Once verified, you will receive an official payment confirmation and dispatch updates.</p>
-
-      <div style="margin-top: 25px; text-align: center;">
-        <a th:href="${orderTrackingUrl ?: 'https://www.shreekamalinee.com/account/orders'}" target="_blank" style="display: inline-block; padding: 12px 28px; background-color: #7b121c; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 700; font-size: 14px;">VIEW ORDER STATUS →</a>
+      <div style="text-align: center; margin: 28px 0 10px;">
+        <a th:href="${orderTrackingUrl ?: ((supportUrl ?: 'https://www.shreekamalinee.com') + '/account/orders')}" class="cta-btn">
+          CHECK VERIFICATION STATUS →
+        </a>
       </div>
+
+      <p style="color: #8A7E77; font-size: 12px; text-align: center; margin-top: 18px;">
+        Bank reconciliations typically take 1–2 hours during business hours. As soon as approved, you will receive an official payment confirmation and dispatch schedule.
+      </p>
     </div>
   </div>
 </body>

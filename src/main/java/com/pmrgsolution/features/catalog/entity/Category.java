@@ -6,7 +6,14 @@ import java.util.List;
 import java.util.UUID;
 
 @Entity
-@Table(name = "categories")
+@Table(
+    name = "categories",
+    uniqueConstraints = {
+        // Slug must be unique within the same parent (or among root categories if parent is null).
+        // This allows "ikat" under Sarees AND "ikat" under Dress Materials — different parents.
+        @UniqueConstraint(name = "uq_category_slug_parent", columnNames = {"slug", "parent_id"})
+    }
+)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -22,7 +29,7 @@ public class Category {
     @Column(name = "name", nullable = false)
     private String name;
 
-    @Column(name = "slug", nullable = false, unique = true)
+    @Column(name = "slug", nullable = false)
     private String slug;
 
     @ManyToOne(fetch = FetchType.LAZY)

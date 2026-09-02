@@ -3,23 +3,46 @@
 <body>
   <div th:replace="~{email/layout/base-layout :: main(~{::#inquiryAlertContent})}">
     <div id="inquiryAlertContent">
-      <div style="background-color: #fdfaf0; border-left: 4px solid #7b121c; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
-        <strong style="color: #7b121c; font-size: 16px;">✉️ NEW CUSTOMER INQUIRY RECEIVED</strong>
-      </div>
-      <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="width: 100%; font-size: 14px; margin-bottom: 20px;">
-        <tr><td style="padding: 6px 0; color: #666; width: 140px;">Patron Name:</td><td><strong th:text="${name}">Patron</strong></td></tr>
-        <tr><td style="padding: 6px 0; color: #666;">Email Address:</td><td><a th:href="'mailto:' + ${email}" th:text="${email}">email@example.com</a></td></tr>
-        <tr><td style="padding: 6px 0; color: #666;">Phone / WhatsApp:</td><td><strong th:text="${phone ?: 'N/A'}">0000000000</strong></td></tr>
-        <tr><td style="padding: 6px 0; color: #666;">Subject Topic:</td><td><strong th:text="${subject}">Subject</strong></td></tr>
-      </table>
-
-      <div style="background-color: #fafafa; border: 1px solid #e0e0e0; border-radius: 4px; padding: 15px; margin-bottom: 20px;">
-        <strong style="color: #333; display: block; margin-bottom: 6px;">Message Details:</strong>
-        <p style="color: #555; line-height: 1.6; margin: 0; font-size: 13.5px;" th:text="${message}">Message body</p>
+      <div style="text-align: center; margin-bottom: 24px;">
+        <div style="display: inline-block; padding: 4px 16px; background-color: #FAF7F2; color: #800020; border: 1px solid #D6A23F; border-radius: 20px; font-weight: 700; font-size: 11.5px; letter-spacing: 1px; text-transform: uppercase;">
+          ✉️ Concierge Inquiry
+        </div>
+        <h2 style="color: #800020; margin: 12px 0 6px; font-family: 'Playfair Display', Georgia, serif; font-size: 22px;">New Patron Message Received</h2>
+        <p style="color: #7A6F68; margin: 0; font-size: 13.5px;">Customer Care & Saree Consultation</p>
       </div>
 
-      <div style="margin-top: 25px; text-align: center;">
-        <a th:href="${inquiriesUrl ?: 'https://www.shreekamalinee.com/admin/inquiries'}" target="_blank" style="display: inline-block; padding: 12px 24px; background-color: #7b121c; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 700;">VIEW INQUIRIES DESK →</a>
+      <!-- Contact Card -->
+      <div style="background-color: #FAF7F2; border: 1px solid #EADBCE; border-radius: 8px; padding: 18px 20px; margin-bottom: 20px;">
+        <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="font-size: 13.5px;">
+          <tr>
+            <td style="padding: 5px 0; color: #7A6F68; width: 140px;">Patron Name:</td>
+            <td style="padding: 5px 0;"><strong style="color: #221D1B;" th:text="${name}">Patron Name</strong></td>
+          </tr>
+          <tr>
+            <td style="padding: 5px 0; color: #7A6F68;">Email Address:</td>
+            <td style="padding: 5px 0;"><a th:href="'mailto:' + ${email}" style="color: #800020; font-weight: 600;" th:text="${email}">patron@example.com</a></td>
+          </tr>
+          <tr>
+            <td style="padding: 5px 0; color: #7A6F68;">Phone / WhatsApp:</td>
+            <td style="padding: 5px 0;"><strong style="color: #221D1B;" th:text="${phone ?: 'Not provided'}">+91 00000 00000</strong></td>
+          </tr>
+          <tr>
+            <td style="padding: 5px 0; color: #7A6F68;">Subject Topic:</td>
+            <td style="padding: 5px 0;"><strong style="color: #800020;" th:text="${subject}">Bridal Saree Consultation</strong></td>
+          </tr>
+        </table>
+      </div>
+
+      <!-- Message Details Bubble -->
+      <div style="background-color: #FFFFFF; border: 1px solid #EADBCE; border-radius: 8px; padding: 18px 20px; margin-bottom: 22px;">
+        <div style="font-size: 12px; font-weight: 700; color: #800020; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Inquiry Message:</div>
+        <p style="color: #2E2724; line-height: 1.65; margin: 0; font-size: 13.5px; white-space: pre-line;" th:text="${message}">Customer message content</p>
+      </div>
+
+      <div style="margin-top: 26px; text-align: center;">
+        <a th:href="${inquiriesUrl ?: ((supportUrl ?: 'https://www.shreekamalinee.com') + '/admin/inquiries')}" target="_blank" class="cta-btn">
+          REPLY IN ADMIN DESK →
+        </a>
       </div>
     </div>
   </div>

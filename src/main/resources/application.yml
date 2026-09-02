@@ -2,7 +2,7 @@ spring:
   application:
     name: shreekamalinee
 
-  # Database Configuration
+  # Database Configuration — environment variables with local defaults
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/shreekamalinee}
     username: ${DB_USERNAME:postgres}
@@ -27,26 +27,28 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
 
-  # Redis Configuration for caching
+  # Redis Configuration for caching — environment variables with local defaults
   data:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
+      repositories:
+        enabled: false
   cache:
-    type: ${CACHE_TYPE:redis}
+    type: ${CACHE_TYPE:none}
 
-  # Servlet / File Upload Configuration
+  # Servlet / File Upload Configuration (technical limits, not secrets)
   servlet:
     multipart:
       max-file-size: 15MB
       max-request-size: 20MB
 
-  # Mail Configuration
+  # Mail Configuration — environment variables with local defaults
   mail:
-    host: ${MAIL_HOST:smtp.gmail.com}
+    host: ${MAIL_HOST:smtp.resend.com}
     port: ${MAIL_PORT:587}
-    username: ${MAIL_USERNAME:admin@shreekamalinee.com}
-    password: ${MAIL_PASSWORD:gmail_app_password_placeholder}
+    username: ${MAIL_USERNAME:resend}
+    password: ${MAIL_PASSWORD:}
     properties:
       mail:
         smtp:
@@ -58,18 +60,18 @@ spring:
           timeout: 5000           # 5 seconds read timeout
           writetimeout: 5000      # 5 seconds write timeout
 
-  # OAuth2 Configuration
+  # OAuth2 Configuration — environment variables with local defaults
   security:
     oauth2:
       client:
         registration:
           google:
-            client-id: ${GOOGLE_CLIENT_ID:google_client_id_placeholder}
-            client-secret: ${GOOGLE_CLIENT_SECRET:google_client_secret_placeholder}
+            client-id: ${GOOGLE_CLIENT_ID:dummy-google-client-id}
+            client-secret: ${GOOGLE_CLIENT_SECRET:dummy-google-client-secret}
 
-# Server Configuration
+# Server Configuration — port with default 8080
 server:
-  port: ${PORT:8081}
+  port: ${PORT:8080}
   forward-headers-strategy: framework # Essential for reading real client IPs behind Cloudflare/Load Balancers
   compression:
     enabled: true
@@ -79,19 +81,16 @@ server:
     whitelabel:
       enabled: false # Disables default Spring error page to use your GlobalExceptionHandler
 
-# shreekamalinee Custom Security & Token Properties
+# shreekamalinee Custom Security & Token Properties — environment variables with local defaults
 shreekamalinee:
   jwt:
-    # SECURITY: No default value. JWT_SECRET MUST be set as an environment variable in production.
-    # If missing, JwtUtils @PostConstruct will throw an error on startup, preventing insecure launch.
-    secret: ${JWT_SECRET}
-    expirationMs: ${JWT_EXPIRATION:900000} # 15 Minutes for Access Token
-    refreshExpirationMs: ${JWT_REFRESH_EXPIRATION:7776000000} # 90 Days for Refresh Token (90 * 24 * 60 * 60 * 1000)
+    secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+    expirationMs: ${JWT_EXPIRATION:86400000}
+    refreshExpirationMs: ${JWT_REFRESH_EXPIRATION:604800000}
   cookie:
-    secure: ${COOKIE_SECURE:false} # false for local dev (http://localhost:5173 / 3000), true for production (https)
-    same-site: ${COOKIE_SAME_SITE:Lax} # Lax for local dev, None for cross-site production
-  # SECURITY: No default value. HMAC_SECRET MUST be set as an environment variable in production.
-  hmac-secret: ${HMAC_SECRET}
+    secure: ${COOKIE_SECURE:false}
+    same-site: ${COOKIE_SAME_SITE:Lax}
+  hmac-secret: ${HMAC_SECRET:supersecretkeyforhmacverification1234567890}
 
 # Actuator Endpoints Configuration
 management:
@@ -103,25 +102,32 @@ management:
     health:
       show-details: when_authorized
 
-# Razorpay Configuration
+# Razorpay Configuration — environment variables with local defaults
 razorpay:
   key:
-    id: ${RAZORPAY_KEY_ID:rzp_test_1234567890abcdef}
-    secret: ${RAZORPAY_KEY_SECRET:razorpay_secret_placeholder}
+    id: ${RAZORPAY_KEY_ID:rzp_test_placeholder}
+    secret: ${RAZORPAY_KEY_SECRET:rzp_secret_placeholder}
 
-# Supabase Storage Configuration
+# Supabase Storage Configuration — environment variables with local defaults
 supabase:
-  url: ${SUPABASE_URL:}
-  key: ${SUPABASE_KEY:}
-  bucket: ${SUPABASE_BUCKET:shreekamalinee}
+  url: ${SUPABASE_URL:https://placeholder.supabase.co}
+  key: ${SUPABASE_KEY:placeholder-supabase-key}
+  bucket: ${SUPABASE_BUCKET:shreekamalinee-products}
 
-# Application Custom Configurations (Unified Root Block)
+# Application Custom Configurations — environment variables with local defaults
 app:
   cors:
-    allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173,https://renaissance-zeta.vercel.app}
+    allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000}
   mail:
-    from: ${MAIL_FROM:${MAIL_USERNAME:onboarding@resend.dev}}
+    from: ${MAIL_FROM:onboarding@resend.dev}
   admin:
     email: ${ADMIN_EMAIL:admin@shreekamalinee.com}
-    password: ${ADMIN_PASSWORD:Admin@ShreeKamalinee2026}
-    notification-email: ${ADMIN_NOTIFICATION_EMAIL:${ADMIN_EMAIL:admin@shreekamalinee.com}}
+    password: ${ADMIN_PASSWORD:Admin@123456}
+    notification-email: ${ADMIN_NOTIFICATION_EMAIL:admin@shreekamalinee.com}
+
+# SpringDoc / Swagger OpenAPI Configuration
+springdoc:
+  api-docs:
+    enabled: ${SWAGGER_ENABLED:false}
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:false}

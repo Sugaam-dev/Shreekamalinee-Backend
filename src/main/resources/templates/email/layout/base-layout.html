@@ -6,42 +6,66 @@
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <title th:text="${emailSubject}">Shreekamalinee</title>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f8; margin: 0; padding: 0; width: 100% !important; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; color: #333333; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #F6F3EE; margin: 0; padding: 0; width: 100% !important; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; color: #221D1B; }
     table { border-collapse: collapse; mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
-    .wrapper { width: 100%; max-width: 680px; margin: 20px auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.06); border: 1px solid #e9ecef; }
-    .header { background: linear-gradient(135deg, #7b121c 0%, #4a050d 100%); padding: 26px 16px; text-align: center; color: #ffffff; }
-    .header h1 { margin: 0; font-size: 24px; font-weight: 700; letter-spacing: 1.5px; font-family: Georgia, serif; white-space: nowrap !important; word-break: keep-all !important; color: #ffffff; }
-    .header p { margin: 6px 0 0; font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: #d4af37; white-space: nowrap !important; word-break: keep-all !important; }
-    .content { padding: 32px 26px; font-size: 15px; line-height: 1.6; color: #333333; }
-    .footer { background-color: #f8f9fa; padding: 22px 16px; text-align: center; font-size: 12px; color: #888888; border-top: 1px solid #edf2f7; line-height: 1.5; }
-    .footer a { color: #7b121c; text-decoration: none; font-weight: 600; }
+    img { border: 0; height: auto; line-height: 100%; outline: none; text-decoration: none; }
+    .wrapper { width: 100%; max-width: 620px; margin: 28px auto; background-color: #FFFFFF; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 30px rgba(34, 29, 27, 0.08); border: 1px solid #EADBCE; }
+    .header { background: linear-gradient(135deg, #800020 0%, #540015 100%); padding: 32px 24px 28px; text-align: center; color: #FFFFFF; position: relative; }
+    .header-gold-line { height: 3px; background: linear-gradient(90deg, #D4AF37 0%, #F3E5AB 50%, #D4AF37 100%); margin: 0; }
+    .header h1 { margin: 0; font-size: 24px; font-weight: 700; letter-spacing: 3.5px; font-family: 'Playfair Display', Georgia, serif; text-transform: uppercase; color: #FFFFFF; }
+    .header p { margin: 6px 0 0; font-size: 10.5px; text-transform: uppercase; letter-spacing: 3px; color: #E8D3A2; font-weight: 500; }
+    .content { padding: 36px 32px; font-size: 14.5px; line-height: 1.65; color: #2E2724; }
+    .footer { background-color: #FAF7F2; padding: 26px 20px; text-align: center; font-size: 12px; color: #7A6F68; border-top: 1px solid #EADBCE; line-height: 1.6; }
+    .footer a { color: #800020; text-decoration: none; font-weight: 600; }
+    .cta-btn { display: inline-block; padding: 13px 30px; background: linear-gradient(135deg, #800020 0%, #660018 100%); color: #FFFFFF !important; text-decoration: none; border-radius: 6px; font-weight: 700; font-size: 13.5px; letter-spacing: 0.8px; text-transform: uppercase; box-shadow: 0 4px 14px rgba(128, 0, 32, 0.25); text-align: center; }
     @media only screen and (max-width: 600px) {
       .wrapper { width: 100% !important; max-width: 100% !important; margin: 0 auto !important; border-radius: 0 !important; border: none !important; }
-      .header { padding: 20px 10px !important; }
-      .header h1 { font-size: 20px !important; letter-spacing: 1px !important; white-space: nowrap !important; word-break: keep-all !important; }
-      .header p { font-size: 10px !important; letter-spacing: 1.5px !important; white-space: nowrap !important; }
-      .content { padding: 20px 14px !important; font-size: 14px !important; }
-      .footer { padding: 18px 10px !important; font-size: 11px !important; }
+      .header { padding: 24px 16px 20px !important; }
+      .header h1 { font-size: 20px !important; letter-spacing: 2.5px !important; }
+      .header p { font-size: 9.5px !important; letter-spacing: 2px !important; }
+      .content { padding: 24px 18px !important; font-size: 14px !important; }
+      .footer { padding: 22px 14px !important; font-size: 11.5px !important; }
+      .cta-btn { width: 100% !important; box-sizing: border-box !important; padding: 14px 16px !important; }
     }
   </style>
 </head>
 <body>
-  <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f4f6f8; margin: 0; padding: 0;">
+  <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #F6F3EE; margin: 0; padding: 0;">
     <tr>
-      <td align="center" style="padding: 10px 0;">
+      <td align="center" style="padding: 16px 8px;">
         <div class="wrapper">
+          <!-- Gold Trim -->
+          <div class="header-gold-line"></div>
+          
+          <!-- Header Banner -->
           <div class="header">
-            <h1 style="margin: 0; font-size: 24px; font-weight: 700; letter-spacing: 1.5px; font-family: Georgia, serif; white-space: nowrap !important; word-break: keep-all !important; color: #ffffff;">SHREEKAMALINEE</h1>
-            <p style="margin: 6px 0 0; font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: #d4af37; white-space: nowrap !important; word-break: keep-all !important;">Luxury Handloom Sarees</p>
+            <h1 style="margin: 0; font-size: 24px; font-weight: 700; letter-spacing: 3.5px; font-family: 'Playfair Display', Georgia, serif; text-transform: uppercase; color: #FFFFFF;">SHREEKAMALINEE</h1>
+            <p style="margin: 6px 0 0; font-size: 10.5px; text-transform: uppercase; letter-spacing: 3px; color: #E8D3A2; font-weight: 500;">Heritage Handlooms & Pure Silks</p>
           </div>
+
+          <!-- Dynamic Content Body -->
           <div class="content" th:fragment="main(contentBody)">
             <div th:replace="${contentBody}">
-              <!-- Dynamic Content -->
+              <!-- Dynamic Template Content Goes Here -->
             </div>
           </div>
+
+          <!-- Brand Guarantee & Trust Seal -->
+          <div style="background-color: #FAF7F2; padding: 12px 20px; border-top: 1px dashed #E5DACF; text-align: center; font-size: 11.5px; color: #6E5D53;">
+            <span>✨ 100% Authentic Handloom Assurance & Silk Mark Certified</span>
+          </div>
+
+          <!-- Footer -->
           <div class="footer">
-            <p style="margin: 0 0 6px; word-break: keep-all;">© 2026 Shreekamalinee Luxury Sarees. Handcrafted with Heritage.</p>
-            <p style="margin: 0;">Visit <a th:href="${supportUrl ?: 'https://www.shreekamalinee.com'}" style="color: #7b121c; text-decoration: none; font-weight: 600; white-space: nowrap;">shreekamalinee.com</a> | Helpline: <a href="mailto:support@shreekamalinee.com" style="color: #7b121c; text-decoration: none; font-weight: 600; white-space: nowrap;">support@shreekamalinee.com</a></p>
+            <p style="margin: 0 0 6px; font-weight: 600; color: #403631;">Shreekamalinee Atelier & Luxury Handloom Sarees</p>
+            <p style="margin: 0 0 10px; color: #8A7E77; font-size: 11.5px;">Handcrafted by Master Artisans Across Traditional Weaving Clusters</p>
+            <p style="margin: 0;">
+              <a th:href="${supportUrl ?: 'https://www.shreekamalinee.com'}" style="color: #800020; text-decoration: none; font-weight: 600;">Visit Boutique</a>
+              &nbsp;•&nbsp;
+              <a th:href="${(supportUrl ?: 'https://www.shreekamalinee.com') + '/account/orders'}" style="color: #800020; text-decoration: none; font-weight: 600;">My Orders</a>
+              &nbsp;•&nbsp;
+              <a href="mailto:support@shreekamalinee.com" style="color: #800020; text-decoration: none; font-weight: 600;">Concierge Support</a>
+            </p>
           </div>
         </div>
       </td>

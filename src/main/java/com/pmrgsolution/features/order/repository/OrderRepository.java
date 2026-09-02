@@ -34,4 +34,6 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
     long countDeliveredOrders();
 
     List<Order> findByStatusAndCreatedAtBefore(String status, LocalDateTime threshold);
+
+    long countByStatus(String status);
 }

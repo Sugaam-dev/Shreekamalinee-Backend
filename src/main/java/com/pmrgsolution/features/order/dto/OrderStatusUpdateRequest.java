@@ -10,12 +10,8 @@ import lombok.*;
 @Builder
 public class OrderStatusUpdateRequest {
     @NotBlank(message = "Status is required")
-    private String status; // PENDING, CONFIRMED, PROCESSING, SHIPPED, DELIVERED, CANCELLED
+    private String status; // CONFIRMED, PROCESSING, SHIPPED, DELIVERED, CANCELLED
 
-    private String paymentStatus;
-    private String trackingNumber;
-    private String courierPartner;
-    private String trackingUrl;
-    private String estimatedDeliveryDate;
+    // Only used when status = CANCELLED
     private String cancellationReason;
 }

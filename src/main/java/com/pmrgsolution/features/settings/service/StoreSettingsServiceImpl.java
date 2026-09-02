@@ -39,6 +39,7 @@ public class StoreSettingsServiceImpl implements StoreSettingsService {
                         .freeShippingThreshold(java.math.BigDecimal.valueOf(1499.00))
                         .standardShippingFee(java.math.BigDecimal.valueOf(99.00))
                         .codHandlingFee(java.math.BigDecimal.valueOf(99.00))
+                        .freeCodThreshold(java.math.BigDecimal.valueOf(2999.00))
                         .isFreeShippingPromoActive(false)
                         .isAnnouncementActive(true)
                         .announcementText("✨ Festive Handloom Edit Live — Free Express Shipping on Orders Above ₹1,499 ✨")
@@ -57,6 +58,7 @@ public class StoreSettingsServiceImpl implements StoreSettingsService {
         if (request.getFreeShippingThreshold() != null) entity.setFreeShippingThreshold(request.getFreeShippingThreshold());
         if (request.getStandardShippingFee() != null) entity.setStandardShippingFee(request.getStandardShippingFee());
         if (request.getCodHandlingFee() != null) entity.setCodHandlingFee(request.getCodHandlingFee());
+        if (request.getFreeCodThreshold() != null) entity.setFreeCodThreshold(request.getFreeCodThreshold());
         if (request.getIsFreeShippingPromoActive() != null) entity.setIsFreeShippingPromoActive(request.getIsFreeShippingPromoActive());
         if (request.getEstimatedDeliveryDaysMin() != null) entity.setEstimatedDeliveryDaysMin(request.getEstimatedDeliveryDaysMin());
         if (request.getEstimatedDeliveryDaysMax() != null) entity.setEstimatedDeliveryDaysMax(request.getEstimatedDeliveryDaysMax());
@@ -70,6 +72,7 @@ public class StoreSettingsServiceImpl implements StoreSettingsService {
                 .freeShippingThreshold(saved.getFreeShippingThreshold())
                 .standardShippingFee(saved.getStandardShippingFee())
                 .codHandlingFee(saved.getCodHandlingFee())
+                .freeCodThreshold(saved.getFreeCodThreshold())
                 .isFreeShippingPromoActive(saved.getIsFreeShippingPromoActive())
                 .estimatedDeliveryDaysMin(saved.getEstimatedDeliveryDaysMin())
                 .estimatedDeliveryDaysMax(saved.getEstimatedDeliveryDaysMax())
@@ -136,8 +139,10 @@ public class StoreSettingsServiceImpl implements StoreSettingsService {
         if (request.getBranchName() != null) entity.setBranchName(request.getBranchName().trim());
         if (request.getUpiId() != null) entity.setUpiId(request.getUpiId().trim());
         if (request.getIsUpiPaymentActive() != null) entity.setIsUpiPaymentActive(request.getIsUpiPaymentActive());
-        if (request.getIsRazorpayPaymentActive() != null) entity.setIsRazorpayPaymentActive(request.getIsRazorpayPaymentActive());
+        // Razorpay is not implemented - permanently enforce inactive in store configuration
+        entity.setIsRazorpayPaymentActive(false);
         if (request.getIsCodPaymentActive() != null) entity.setIsCodPaymentActive(request.getIsCodPaymentActive());
+        if (request.getIsWhatsappOrderActive() != null) entity.setIsWhatsappOrderActive(request.getIsWhatsappOrderActive());
         if (request.getEstimatedDeliveryDaysMin() != null) entity.setEstimatedDeliveryDaysMin(request.getEstimatedDeliveryDaysMin());
         if (request.getEstimatedDeliveryDaysMax() != null) entity.setEstimatedDeliveryDaysMax(request.getEstimatedDeliveryDaysMax());
         if (request.getReturnWindowDays() != null) entity.setReturnWindowDays(request.getReturnWindowDays());
@@ -191,14 +196,17 @@ public class StoreSettingsServiceImpl implements StoreSettingsService {
                 .freeShippingThreshold(entity.getFreeShippingThreshold())
                 .standardShippingFee(entity.getStandardShippingFee())
                 .codHandlingFee(entity.getCodHandlingFee())
+                .freeCodThreshold(entity.getFreeCodThreshold())
                 .isFreeShippingPromoActive(entity.getIsFreeShippingPromoActive())
                 .isAnnouncementActive(entity.getIsAnnouncementActive())
                 .announcementText(entity.getAnnouncementText())
                 .announcementsJson(entity.getAnnouncementsJson())
                 .announcementLink(entity.getAnnouncementLink())
                 .isUpiPaymentActive(entity.getIsUpiPaymentActive() != null ? entity.getIsUpiPaymentActive() : true)
-                .isRazorpayPaymentActive(entity.getIsRazorpayPaymentActive() != null ? entity.getIsRazorpayPaymentActive() : true)
+                .isRazorpayPaymentActive(false)
+                .isRazorpayImplemented(false)
                 .isCodPaymentActive(entity.getIsCodPaymentActive() != null ? entity.getIsCodPaymentActive() : true)
+                .isWhatsappOrderActive(entity.getIsWhatsappOrderActive() != null ? entity.getIsWhatsappOrderActive() : true)
                 .estimatedDeliveryDaysMin(entity.getEstimatedDeliveryDaysMin() != null ? entity.getEstimatedDeliveryDaysMin() : 3)
                 .estimatedDeliveryDaysMax(entity.getEstimatedDeliveryDaysMax() != null ? entity.getEstimatedDeliveryDaysMax() : 5)
                 .returnWindowDays(entity.getReturnWindowDays() != null ? entity.getReturnWindowDays() : 7)

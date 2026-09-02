@@ -17,6 +17,7 @@ import com.pmrgsolution.features.coupon.repository.CouponRepository;
 import com.pmrgsolution.features.coupon.repository.CouponUsageRepository;
 import com.pmrgsolution.features.coupon.service.CouponService;
 import com.pmrgsolution.features.order.dto.CheckoutRequest;
+import com.pmrgsolution.features.order.dto.OrderResponse;
 import com.pmrgsolution.features.order.entity.Order;
 import com.pmrgsolution.features.order.entity.OrderItem;
 import com.pmrgsolution.features.order.repository.OrderItemRepository;
@@ -155,15 +156,16 @@ class OrderServiceImplTest {
     @Test
     @DisplayName("cancelOrder_pending: Cancels PENDING order and restores variant stock")
     void cancelOrder_pending_success_restoresStock() {
+        pendingOrder.setIsStockDeducted(true);
         OrderItem oi = OrderItem.builder()
                 .id(UUID.randomUUID()).order(pendingOrder)
                 .product(product).variant(variant).quantity(2).build();
 
         when(orderRepository.findByIdAndUserId(orderId, userId)).thenReturn(Optional.of(pendingOrder));
         when(orderItemRepository.findByOrderId(orderId)).thenReturn(List.of(oi));
+        when(productVariantRepository.findByIdForUpdate(variantId)).thenReturn(Optional.of(variant));
         when(productVariantRepository.save(any())).thenReturn(variant);
         when(orderRepository.save(any())).thenReturn(pendingOrder);
-        when(orderItemRepository.findByOrderId(orderId)).thenReturn(List.of(oi));
 
         // Should not throw
         assertThatCode(() -> orderService.cancelOrderCustomer(userId, orderId))
@@ -172,6 +174,27 @@ class OrderServiceImplTest {
         // Variant stock should be restored: 10 + 2 = 12
         assertThat(variant.getStock()).isEqualTo(12);
         verify(productVariantRepository).save(variant);
+    }
+
+    // ─────────────────── ADMIN MANUAL ORDER TESTS ────────────────────
+
+    @Test
+    @DisplayName("createAdminManualOrder_razorpayPayment_throwsBadRequest: Rejects Razorpay for manual admin orders")
+    void createAdminManualOrder_razorpay_throwsBadRequest() {
+        com.pmrgsolution.features.order.dto.AdminManualOrderRequest req = com.pmrgsolution.features.order.dto.AdminManualOrderRequest.builder()
+                .productId(productId)
+                .customerName("Rahul Sharma")
+                .customerPhone("9876543210")
+                .addressLine1("123 Street")
+                .city("Mumbai")
+                .state("MH")
+                .postalCode("400001")
+                .paymentMethod("RAZORPAY")
+                .build();
+
+        assertThatThrownBy(() -> orderService.createAdminManualOrder(req))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("Razorpay");
     }
 
     @Test
@@ -224,5 +247,44 @@ class OrderServiceImplTest {
         // Should not throw for the correct user
         assertThatCode(() -> orderService.getOrderByOrderNumberForUser("SK-1234567890-123", userId))
                 .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("createAdminManualOrder_success: Creates order without attaching address to user profile")
+    void createAdminManualOrder_success_addressNotAttachedToUserProfile() {
+        com.pmrgsolution.features.order.dto.AdminManualOrderRequest req = new com.pmrgsolution.features.order.dto.AdminManualOrderRequest();
+        req.setCustomerEmail("manual@test.com");
+        req.setCustomerName("Manual Patron");
+        req.setCustomerPhone("9876543210");
+        req.setAddressLine1("456 MG Road");
+        req.setCity("Mumbai");
+        req.setState("Maharashtra");
+        req.setPostalCode("400001");
+        req.setProductId(productId);
+        req.setQuantity(1);
+        req.setPaymentMethod("WHATSAPP_UPI");
+        req.setPaymentStatus("PAID");
+
+        when(userRepository.findByEmailIgnoreCase("manual@test.com")).thenReturn(Optional.of(testUser));
+        when(shippingAddressRepository.save(org.mockito.ArgumentMatchers.any(ShippingAddress.class))).thenAnswer(i -> {
+            ShippingAddress sa = i.getArgument(0);
+            org.assertj.core.api.Assertions.assertThat(sa.getUser()).isNull();
+            sa.setId(UUID.randomUUID());
+            return sa;
+        });
+        when(productRepository.findById(productId)).thenReturn(Optional.of(product));
+        when(orderRepository.save(org.mockito.ArgumentMatchers.any(Order.class))).thenAnswer(i -> {
+            Order o = i.getArgument(0);
+            o.setId(orderId);
+            return o;
+        });
+        when(orderItemRepository.save(org.mockito.ArgumentMatchers.any(OrderItem.class))).thenAnswer(i -> i.getArgument(0));
+        when(orderItemRepository.findByOrderId(orderId)).thenReturn(List.of());
+        when(transactionRepository.findByOrderId(orderId)).thenReturn(Optional.empty());
+
+        OrderResponse res = orderService.createAdminManualOrder(req);
+        org.assertj.core.api.Assertions.assertThat(res).isNotNull();
+        org.assertj.core.api.Assertions.assertThat(res.getShippingAddress()).isNotNull();
+        org.assertj.core.api.Assertions.assertThat(res.getShippingAddress().getAddressLine1()).isEqualTo("456 MG Road");
     }
 }

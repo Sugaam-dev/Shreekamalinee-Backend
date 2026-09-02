@@ -3,6 +3,7 @@ package com.pmrgsolution.features.auth.service;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.util.Collections;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -357,8 +358,35 @@ public class AuthServiceImpl implements AuthService {
             throw new BusinessException("Invalid or expired refresh token", HttpStatus.UNAUTHORIZED);
         }
 
-        ActiveSession session = sessionRepository.findByRefreshToken(requestRefreshToken)
-                .orElseThrow(() -> new BusinessException("Invalid or revoked refresh session. Please login again.", HttpStatus.UNAUTHORIZED));
+        Optional<ActiveSession> sessionOpt = sessionRepository.findByRefreshToken(requestRefreshToken);
+
+        if (sessionOpt.isEmpty()) {
+            // Grace Period Check: Allow recently rotated token within 30 seconds to handle concurrent frontend requests
+            Optional<ActiveSession> graceSessionOpt = sessionRepository.findByPreviousRefreshToken(requestRefreshToken);
+            if (graceSessionOpt.isPresent()) {
+                ActiveSession graceSession = graceSessionOpt.get();
+                if (graceSession.getPreviousRefreshTokenExpiry() != null &&
+                        graceSession.getPreviousRefreshTokenExpiry().isAfter(LocalDateTime.now())) {
+                    User user = graceSession.getUser();
+                    if (!user.isEnabled() || user.isAccountLocked()) {
+                        sessionRepository.delete(graceSession);
+                        throw new BusinessException("Account is inactive or locked.", HttpStatus.FORBIDDEN);
+                    }
+
+                    log.debug("Refresh token grace period matched for session: {}", graceSession.getSessionId());
+                    String newAccessToken = jwtUtils.generateToken(user.getEmail(), graceSession.getSessionId().toString());
+                    return TokenRefreshResponse.builder()
+                            .accessToken(newAccessToken)
+                            .refreshToken(graceSession.getRefreshToken())
+                            .tokenType("Bearer")
+                            .build();
+                }
+            }
+
+            throw new BusinessException("Invalid or revoked refresh session. Please login again.", HttpStatus.UNAUTHORIZED);
+        }
+
+        ActiveSession session = sessionOpt.get();
 
         if (session.getRefreshTokenExpiry() != null && session.getRefreshTokenExpiry().isBefore(LocalDateTime.now())) {
             sessionRepository.delete(session);
@@ -371,8 +399,10 @@ public class AuthServiceImpl implements AuthService {
             throw new BusinessException("Account is inactive or locked.", HttpStatus.FORBIDDEN);
         }
 
-        // Automatic Token Rotation: Generate a fresh refresh token and fresh access token
+        // Automatic Token Rotation with 30-second Grace Window for In-Flight Concurrent Requests
         String newRefreshToken = jwtUtils.generateRefreshToken(user.getEmail(), session.getSessionId().toString());
+        session.setPreviousRefreshToken(session.getRefreshToken());
+        session.setPreviousRefreshTokenExpiry(LocalDateTime.now().plusSeconds(30));
         session.setRefreshToken(newRefreshToken);
         session.setRefreshTokenExpiry(LocalDateTime.now().plusNanos(jwtUtils.getRefreshExpirationMs() * 1_000_000L));
         session.setLastActive(LocalDateTime.now());

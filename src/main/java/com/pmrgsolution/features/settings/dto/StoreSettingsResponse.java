@@ -23,6 +23,7 @@ public class StoreSettingsResponse {
     private BigDecimal freeShippingThreshold;
     private BigDecimal standardShippingFee;
     private BigDecimal codHandlingFee;
+    private BigDecimal freeCodThreshold;
     private Boolean isFreeShippingPromoActive;
     private Boolean isAnnouncementActive;
     private String announcementText;
@@ -32,7 +33,9 @@ public class StoreSettingsResponse {
     // Payment methods toggles
     private Boolean isUpiPaymentActive;
     private Boolean isRazorpayPaymentActive;
+    private Boolean isRazorpayImplemented;
     private Boolean isCodPaymentActive;
+    private Boolean isWhatsappOrderActive;
 
     // Delivery SLA & Return Policy
     private Integer estimatedDeliveryDaysMin;

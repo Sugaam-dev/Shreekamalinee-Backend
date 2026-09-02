@@ -1,13 +1,7 @@
 package com.pmrgsolution.features.auth.service;
 
-import com.pmrgsolution.features.address.entity.ShippingAddress;
-import com.pmrgsolution.features.order.entity.Order;
-import com.pmrgsolution.features.order.entity.OrderItem;
+import com.pmrgsolution.features.order.dto.OrderEmailContext;
 import jakarta.mail.internet.MimeMessage;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -17,13 +11,6 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
-
-import java.math.BigDecimal;
-import java.text.NumberFormat;
-import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
 
 @Slf4j
 @Service
@@ -38,407 +25,287 @@ public class EmailServiceImpl implements EmailService {
 
     private static final String STORE_NAME = "Shreekamalinee";
     private static final String SUPPORT_URL = "https://www.shreekamalinee.com";
-    private static final NumberFormat INR_FORMAT = NumberFormat.getCurrencyInstance(new Locale("en", "IN"));
 
     // =========================================================================
-    // 1. AUTHENTICATION & SECURITY NOTIFICATIONS
+    // 1. AUTH & SECURITY (no JPA risk — only strings)
     // =========================================================================
 
     @Async
     @Override
     public void sendOtpEmail(String to, String otp) {
-        Context context = new Context();
-        context.setVariable("otp", otp);
-        sendTemplateEmail(to, "Verify your Shreekamalinee Account", "email/customer/otp-verification", context);
+        Context ctx = new Context();
+        ctx.setVariable("otp", otp);
+        dispatch(to, "Verify your Shreekamalinee Account", "email/customer/otp-verification", ctx);
     }
 
     @Async
     @Override
     public void sendPasswordResetEmail(String to, String otp) {
-        Context context = new Context();
-        context.setVariable("otp", otp);
-        sendTemplateEmail(to, "Reset your Shreekamalinee Password", "email/customer/password-reset", context);
+        Context ctx = new Context();
+        ctx.setVariable("otp", otp);
+        dispatch(to, "Reset your Shreekamalinee Password", "email/customer/password-reset", ctx);
     }
 
     @Async
     @Override
     public void sendPasswordChangedAlert(String to, String userName) {
-        Context context = new Context();
-        context.setVariable("userName", (userName != null && !userName.isBlank()) ? userName : "Valued Patron");
-        sendTemplateEmail(to, "Security Alert: Your Password Was Changed", "email/customer/password-changed", context);
+        Context ctx = new Context();
+        ctx.setVariable("userName", safe(userName, "Valued Patron"));
+        dispatch(to, "Security Alert: Your Password Was Changed", "email/customer/password-changed", ctx);
     }
 
     @Async
     @Override
     public void sendAccountLockedAlert(String to, String userName) {
-        Context context = new Context();
-        context.setVariable("userName", (userName != null && !userName.isBlank()) ? userName : "Valued Patron");
-        sendTemplateEmail(to, "Security Alert: Account Temporarily Locked", "email/customer/account-locked", context);
+        Context ctx = new Context();
+        ctx.setVariable("userName", safe(userName, "Valued Patron"));
+        dispatch(to, "Security Alert: Account Temporarily Locked", "email/customer/account-locked", ctx);
     }
 
     @Async
     @Override
     public void sendAccountStatusChangedAlert(String to, String userName, boolean enabled) {
-        Context context = new Context();
-        context.setVariable("userName", (userName != null && !userName.isBlank()) ? userName : "Valued Patron");
-        context.setVariable("enabled", enabled);
-        String statusText = enabled ? "Reactivated" : "Suspended";
-        sendTemplateEmail(to, "Shreekamalinee Account Status: " + statusText, "email/customer/account-status", context);
+        Context ctx = new Context();
+        ctx.setVariable("userName", safe(userName, "Valued Patron"));
+        ctx.setVariable("enabled", enabled);
+        dispatch(to, "Shreekamalinee Account Status: " + (enabled ? "Reactivated" : "Suspended"),
+                "email/customer/account-status", ctx);
     }
 
     // =========================================================================
-    // 2. CUSTOMER ORDER LIFECYCLE NOTIFICATIONS
-    // =========================================================================
-
-    @Async
-    @Override
-    public void sendOrderConfirmationEmail(String to, Order order) {
-        String orderNumber = (order.getOrderNumber() != null && !order.getOrderNumber().isBlank())
-                ? order.getOrderNumber() : ("SK-" + order.getId().toString().substring(0, 8).toUpperCase());
-        String customerName = order.getUser() != null ? order.getUser().getFirstName() : "Valued Patron";
-
-        Context context = new Context();
-        context.setVariable("orderNumber", orderNumber);
-        context.setVariable("customerName", customerName);
-        populateOrderItemsContext(context, order);
-        populatePriceBreakdownContext(context, order);
-        populateAddressContext(context, order.getShippingAddress());
-
-        sendTemplateEmail(to, "Order Confirmed: " + orderNumber + " — Shreekamalinee", "email/customer/order-confirmation", context);
-    }
-
-    @Async
-    @Override
-    public void sendOrderConfirmationEmail(String to, String orderNumber, String totalAmount) {
-        Context context = new Context();
-        context.setVariable("orderNumber", orderNumber);
-        context.setVariable("customerName", "Valued Patron");
-        context.setVariable("subtotalFormatted", "₹" + totalAmount);
-        context.setVariable("finalTotalFormatted", "₹" + totalAmount);
-        context.setVariable("formulaText", "Total = ₹" + totalAmount);
-        context.setVariable("paymentMethodDisplay", "Direct Payment");
-        context.setVariable("paymentStatus", "CONFIRMED");
-        context.setVariable("paymentStatusColor", "#27ae60");
-        context.setVariable("hasShippingAddress", false);
-        context.setVariable("orderItems", List.of());
-
-        sendTemplateEmail(to, "Order Confirmed: " + orderNumber + " — Shreekamalinee", "email/customer/order-confirmation", context);
-    }
-
-    @Async
-    @Override
-    public void sendPaymentProofReceivedEmail(String to, Order order, String utrNumber) {
-        String orderNumber = order.getOrderNumber() != null ? order.getOrderNumber() : "SK-" + order.getId().toString().substring(0, 8).toUpperCase();
-        String customerName = order.getUser() != null ? order.getUser().getFirstName() : "Valued Patron";
-        String utrDisplay = (utrNumber != null && !utrNumber.isBlank()) ? utrNumber : "Submitted via Screenshot";
-
-        Context context = new Context();
-        context.setVariable("orderNumber", orderNumber);
-        context.setVariable("customerName", customerName);
-        context.setVariable("utrNumber", utrDisplay);
-        context.setVariable("orderTrackingUrl", SUPPORT_URL + "/account/orders");
-        populatePriceBreakdownContext(context, order);
-
-        sendTemplateEmail(to, "Payment Proof Received: " + orderNumber + " (Under Verification) — Shreekamalinee", "email/customer/payment-proof-received", context);
-    }
-
-    @Async
-    @Override
-    public void sendOrderShippedEmail(String to, Order order) {
-        String orderNum = order.getOrderNumber() != null && !order.getOrderNumber().isBlank()
-                ? order.getOrderNumber() : ("SK-" + order.getId().toString().substring(0, 8).toUpperCase());
-        String customerName = order.getUser() != null ? order.getUser().getFirstName() : "Valued Customer";
-        String courier = order.getCourierName() != null ? order.getCourierName() : "BlueDart Express";
-        String trackingNum = order.getTrackingNumber() != null ? order.getTrackingNumber() : "AWB" + order.getId().toString().substring(0, 8).toUpperCase();
-        String trackingUrl = order.getTrackingUrl() != null && !order.getTrackingUrl().isBlank()
-                ? order.getTrackingUrl() : (SUPPORT_URL + "/account/orders");
-        String estDate = order.getEstimatedDeliveryDate() != null
-                ? order.getEstimatedDeliveryDate().format(DateTimeFormatter.ofPattern("dd MMMM, yyyy")) : "3-5 Business Days";
-
-        Context context = new Context();
-        context.setVariable("orderNumber", orderNum);
-        context.setVariable("customerName", customerName);
-        context.setVariable("courierName", courier);
-        context.setVariable("trackingNumber", trackingNum);
-        context.setVariable("trackingUrl", trackingUrl);
-        context.setVariable("estimatedDeliveryDate", estDate);
-
-        sendTemplateEmail(to, "Your Saree is Dispatched! 🚚 Track Order " + orderNum, "email/customer/order-shipped", context);
-    }
-
-    @Async
-    @Override
-    public void sendOrderDeliveredEmail(String to, Order order) {
-        String orderNum = order.getOrderNumber() != null && !order.getOrderNumber().isBlank()
-                ? order.getOrderNumber() : ("SK-" + order.getId().toString().substring(0, 8).toUpperCase());
-        String customerName = order.getUser() != null ? order.getUser().getFirstName() : "Valued Customer";
-
-        Context context = new Context();
-        context.setVariable("orderNumber", orderNum);
-        context.setVariable("customerName", customerName);
-        context.setVariable("reviewUrl", SUPPORT_URL + "/account/orders");
-
-        sendTemplateEmail(to, "Delivered: Your Luxury Handloom Saree Has Arrived! ✨ — " + orderNum, "email/customer/order-delivered", context);
-    }
-
-    @Async
-    @Override
-    public void sendOrderCancelledEmail(String to, Order order, String reason) {
-        String orderNum = order.getOrderNumber() != null && !order.getOrderNumber().isBlank()
-                ? order.getOrderNumber() : ("SK-" + order.getId().toString().substring(0, 8).toUpperCase());
-        String customerName = order.getUser() != null ? order.getUser().getFirstName() : "Valued Customer";
-        BigDecimal total = order.getFinalAmount() != null ? order.getFinalAmount() : order.getTotalAmount();
-        boolean refundApplies = "PAID".equalsIgnoreCase(order.getPaymentStatus()) || !"COD".equalsIgnoreCase(order.getPaymentMethod());
-
-        Context context = new Context();
-        context.setVariable("orderNumber", orderNum);
-        context.setVariable("customerName", customerName);
-        context.setVariable("cancelReason", (reason != null && !reason.isBlank()) ? reason : "Customer request / Administrative cancellation");
-        context.setVariable("refundAmountFormatted", formatCurrency(total));
-        context.setVariable("refundApplicable", refundApplies);
-
-        sendTemplateEmail(to, "Order Cancelled: " + orderNum + " — Shreekamalinee", "email/customer/order-cancelled", context);
-    }
-
-    // =========================================================================
-    // 3. ADMIN MANAGEMENT ALERTS
+    // 2. CUSTOMER ORDER LIFECYCLE
+    //    All methods receive OrderEmailContext — zero JPA risk
     // =========================================================================
 
     @Async
     @Override
-    public void sendAdminNewOrderAlert(String adminEmail, Order order) {
-        String orderNum = order.getOrderNumber() != null && !order.getOrderNumber().isBlank()
-                ? order.getOrderNumber() : ("SK-" + order.getId().toString().substring(0, 8).toUpperCase());
-        String customerName = order.getUser() != null ? (order.getUser().getFirstName() + " " + (order.getUser().getLastName() != null ? order.getUser().getLastName() : "")) : "Patron Customer";
-        String customerEmail = order.getUser() != null ? order.getUser().getEmail() : "N/A";
-        String city = order.getShippingAddress() != null ? order.getShippingAddress().getCity() : "India";
-        String state = order.getShippingAddress() != null ? order.getShippingAddress().getState() : "";
-        BigDecimal total = order.getFinalAmount() != null ? order.getFinalAmount() : order.getTotalAmount();
-
-        Context context = new Context();
-        context.setVariable("orderNumber", orderNum);
-        context.setVariable("customerName", customerName);
-        context.setVariable("customerEmail", customerEmail);
-        context.setVariable("customerCityState", city + (state.isBlank() ? "" : ", " + state));
-        context.setVariable("paymentMethod", order.getPaymentMethod());
-        context.setVariable("paymentStatus", order.getPaymentStatus());
-        context.setVariable("adminOrderUrl", SUPPORT_URL + "/admin/orders/" + order.getId());
-        populateOrderItemsContext(context, order);
-        populatePriceBreakdownContext(context, order);
-
-        sendTemplateEmail(adminEmail, "🚨 New Order " + orderNum + " - " + formatCurrency(total) + " (" + customerName + ")", "email/admin/new-order-alert", context);
+    public void sendOrderConfirmationEmail(String to, OrderEmailContext emailCtx) {
+        Context ctx = new Context();
+        ctx.setVariable("orderNumber", emailCtx.getOrderNumber());
+        ctx.setVariable("customerName", emailCtx.getCustomerFirstName());
+        populatePricing(ctx, emailCtx);
+        populateItems(ctx, emailCtx);
+        populateAddress(ctx, emailCtx);
+        dispatch(to, "Order Confirmed: " + emailCtx.getOrderNumber() + " — Shreekamalinee",
+                "email/customer/order-confirmation", ctx);
     }
 
     @Async
     @Override
-    public void sendAdminVipOrderAlert(String adminEmail, Order order) {
-        String orderNum = order.getOrderNumber() != null && !order.getOrderNumber().isBlank()
-                ? order.getOrderNumber() : ("SK-" + order.getId().toString().substring(0, 8).toUpperCase());
-        String customerName = order.getUser() != null ? (order.getUser().getFirstName() + " " + (order.getUser().getLastName() != null ? order.getUser().getLastName() : "")) : "Patron Customer";
-        BigDecimal total = order.getFinalAmount() != null ? order.getFinalAmount() : order.getTotalAmount();
-
-        Context context = new Context();
-        context.setVariable("orderNumber", orderNum);
-        context.setVariable("customerName", customerName);
-        context.setVariable("adminOrderUrl", SUPPORT_URL + "/admin/orders/" + order.getId());
-        populatePriceBreakdownContext(context, order);
-
-        sendTemplateEmail(adminEmail, "💎 VIP Order Alert: " + orderNum + " (" + formatCurrency(total) + ") - " + customerName, "email/admin/vip-order-alert", context);
+    public void sendPaymentProofReceivedEmail(String to, OrderEmailContext emailCtx) {
+        Context ctx = new Context();
+        ctx.setVariable("orderNumber", emailCtx.getOrderNumber());
+        ctx.setVariable("customerName", emailCtx.getCustomerFirstName());
+        ctx.setVariable("utrNumber", safe(emailCtx.getUtrNumber(), "Submitted via Screenshot"));
+        ctx.setVariable("orderTrackingUrl", emailCtx.getOrderTrackingUrl());
+        populatePricing(ctx, emailCtx);
+        dispatch(to, "Payment Proof Received: " + emailCtx.getOrderNumber() + " (Under Verification) — Shreekamalinee",
+                "email/customer/payment-proof-received", ctx);
     }
 
     @Async
     @Override
-    public void sendAdminManualPaymentUploadedAlert(String adminEmail, Order order) {
-        String orderNum = order.getOrderNumber() != null && !order.getOrderNumber().isBlank()
-                ? order.getOrderNumber() : ("SK-" + order.getId().toString().substring(0, 8).toUpperCase());
-        String customerName = order.getUser() != null ? (order.getUser().getFirstName() + " " + (order.getUser().getLastName() != null ? order.getUser().getLastName() : "")) : "Patron Customer";
-
-        Context context = new Context();
-        context.setVariable("orderNumber", orderNum);
-        context.setVariable("customerName", customerName);
-        context.setVariable("adminOrderUrl", SUPPORT_URL + "/admin/orders");
-        populatePriceBreakdownContext(context, order);
-
-        sendTemplateEmail(adminEmail, "⚠️ Action Needed: Verify UPI Payment Receipt (" + orderNum + ")", "email/admin/manual-payment-alert", context);
+    public void sendOrderShippedEmail(String to, OrderEmailContext emailCtx) {
+        Context ctx = new Context();
+        ctx.setVariable("orderNumber", emailCtx.getOrderNumber());
+        ctx.setVariable("customerName", emailCtx.getCustomerFirstName());
+        ctx.setVariable("courierName", safe(emailCtx.getCourierPartner(), "Standard Courier"));
+        ctx.setVariable("trackingNumber", emailCtx.getTrackingNumber());
+        ctx.setVariable("trackingUrl", emailCtx.getTrackingUrl());
+        ctx.setVariable("estimatedDeliveryDate", emailCtx.getEstimatedDeliveryDateDisplay());
+        dispatch(to, "Your Saree is Dispatched! 🚚 Track Order " + emailCtx.getOrderNumber(),
+                "email/customer/order-shipped", ctx);
     }
 
     @Async
     @Override
-    public void sendAdminOrderCancelledAlert(String adminEmail, Order order) {
-        String orderNum = order.getOrderNumber() != null && !order.getOrderNumber().isBlank()
-                ? order.getOrderNumber() : ("SK-" + order.getId().toString().substring(0, 8).toUpperCase());
-        String customerName = order.getUser() != null ? (order.getUser().getFirstName() + " " + (order.getUser().getLastName() != null ? order.getUser().getLastName() : "")) : "Customer";
-
-        Context context = new Context();
-        context.setVariable("orderNumber", orderNum);
-        context.setVariable("customerName", customerName);
-        context.setVariable("adminOrderUrl", SUPPORT_URL + "/admin/orders");
-        populatePriceBreakdownContext(context, order);
-
-        sendTemplateEmail(adminEmail, "🛑 Customer Cancelled Order " + orderNum, "email/admin/order-cancelled-alert", context);
+    public void sendOrderDeliveredEmail(String to, OrderEmailContext emailCtx) {
+        Context ctx = new Context();
+        ctx.setVariable("orderNumber", emailCtx.getOrderNumber());
+        ctx.setVariable("customerName", emailCtx.getCustomerFirstName());
+        ctx.setVariable("reviewUrl", SUPPORT_URL + "/account/orders");
+        dispatch(to, "Delivered: Your Luxury Handloom Saree Has Arrived! ✨ — " + emailCtx.getOrderNumber(),
+                "email/customer/order-delivered", ctx);
     }
 
     @Async
     @Override
-    public void sendAdminNewInquiryAlert(String adminEmail, String name, String email, String phone, String subject, String message) {
-        Context context = new Context();
-        context.setVariable("name", name);
-        context.setVariable("email", email);
-        context.setVariable("phone", phone);
-        context.setVariable("subject", subject);
-        context.setVariable("message", message);
-        context.setVariable("inquiriesUrl", SUPPORT_URL + "/admin/inquiries");
-
-        sendTemplateEmail(adminEmail, "📩 New Customer Inquiry: " + subject + " (" + name + ")", "email/admin/new-inquiry-alert", context);
+    public void sendOrderCancelledEmail(String to, OrderEmailContext emailCtx) {
+        Context ctx = new Context();
+        ctx.setVariable("orderNumber", emailCtx.getOrderNumber());
+        ctx.setVariable("customerName", emailCtx.getCustomerFirstName());
+        ctx.setVariable("cancelReason", safe(emailCtx.getCancellationReason(),
+                "Customer request / Administrative cancellation"));
+        ctx.setVariable("refundAmountFormatted", emailCtx.getFinalTotalFormatted());
+        ctx.setVariable("refundApplicable", emailCtx.isRefundApplicable());
+        dispatch(to, "Order Cancelled: " + emailCtx.getOrderNumber() + " — Shreekamalinee",
+                "email/customer/order-cancelled", ctx);
     }
 
     // =========================================================================
-    // 4. PRIVATE HELPERS & TEMPLATE ENGINE DISPATCHER
+    // 3. ADMIN ALERTS
     // =========================================================================
 
-    private void sendTemplateEmail(String to, String subject, String templatePath, Context context) {
+    @Async
+    @Override
+    public void sendAdminNewOrderAlert(String adminEmail, OrderEmailContext emailCtx) {
+        Context ctx = new Context();
+        ctx.setVariable("orderNumber", emailCtx.getOrderNumber());
+        ctx.setVariable("customerName", emailCtx.getCustomerFullName());
+        ctx.setVariable("customerEmail", emailCtx.getCustomerEmail());
+        ctx.setVariable("customerCityState", emailCtx.getCustomerCityState());
+        ctx.setVariable("paymentMethod", emailCtx.getPaymentMethod());
+        ctx.setVariable("paymentStatus", emailCtx.getPaymentStatus());
+        ctx.setVariable("adminOrderUrl", emailCtx.getAdminOrderUrl());
+        populatePricing(ctx, emailCtx);
+        populateItems(ctx, emailCtx);
+        dispatch(adminEmail,
+                "🚨 New Order " + emailCtx.getOrderNumber() + " - " +
+                        emailCtx.getFinalTotalFormatted() + " (" + emailCtx.getCustomerFullName() + ")",
+                "email/admin/new-order-alert", ctx);
+    }
+
+    @Async
+    @Override
+    public void sendAdminVipOrderAlert(String adminEmail, OrderEmailContext emailCtx) {
+        Context ctx = new Context();
+        ctx.setVariable("orderNumber", emailCtx.getOrderNumber());
+        ctx.setVariable("customerName", emailCtx.getCustomerFullName());
+        ctx.setVariable("adminOrderUrl", emailCtx.getAdminOrderUrl());
+        populatePricing(ctx, emailCtx);
+        dispatch(adminEmail,
+                "💎 VIP Order Alert: " + emailCtx.getOrderNumber() +
+                        " (" + emailCtx.getFinalTotalFormatted() + ") - " + emailCtx.getCustomerFullName(),
+                "email/admin/vip-order-alert", ctx);
+    }
+
+    @Async
+    @Override
+    public void sendAdminManualPaymentUploadedAlert(String adminEmail, OrderEmailContext emailCtx) {
+        Context ctx = new Context();
+        ctx.setVariable("orderNumber", emailCtx.getOrderNumber());
+        ctx.setVariable("customerName", emailCtx.getCustomerFullName());
+        ctx.setVariable("utrNumber", safe(emailCtx.getUtrNumber(), "Not provided"));
+        ctx.setVariable("adminOrderUrl", SUPPORT_URL + "/admin/orders");
+        populatePricing(ctx, emailCtx);
+        dispatch(adminEmail,
+                "⚠️ Action Needed: Verify UPI Payment Receipt (" + emailCtx.getOrderNumber() + ")",
+                "email/admin/manual-payment-alert", ctx);
+    }
+
+    @Async
+    @Override
+    public void sendAdminOrderCancelledAlert(String adminEmail, OrderEmailContext emailCtx) {
+        Context ctx = new Context();
+        ctx.setVariable("orderNumber", emailCtx.getOrderNumber());
+        ctx.setVariable("customerName", emailCtx.getCustomerFullName());
+        ctx.setVariable("adminOrderUrl", SUPPORT_URL + "/admin/orders");
+        populatePricing(ctx, emailCtx);
+        dispatch(adminEmail,
+                "🛑 Customer Cancelled Order " + emailCtx.getOrderNumber(),
+                "email/admin/order-cancelled-alert", ctx);
+    }
+
+    @Async
+    @Override
+    public void sendAdminPaymentApprovedAlert(String adminEmail, OrderEmailContext emailCtx) {
+        Context ctx = new Context();
+        ctx.setVariable("orderNumber", emailCtx.getOrderNumber());
+        ctx.setVariable("customerName", emailCtx.getCustomerFullName());
+        ctx.setVariable("paymentMethod", emailCtx.getPaymentMethodDisplay());
+        ctx.setVariable("adminOrderUrl", emailCtx.getAdminOrderUrl());
+        populatePricing(ctx, emailCtx);
+        dispatch(adminEmail,
+                "✅ Payment Approved: " + emailCtx.getOrderNumber() +
+                        " (" + emailCtx.getFinalTotalFormatted() + ") — " + emailCtx.getPaymentMethodDisplay(),
+                "email/admin/payment-approved-alert", ctx);
+    }
+
+    @Async
+    @Override
+    public void sendAdminNewInquiryAlert(String adminEmail, String name, String email,
+                                          String phone, String subject, String message) {
+        Context ctx = new Context();
+        ctx.setVariable("name", name);
+        ctx.setVariable("email", email);
+        ctx.setVariable("phone", phone);
+        ctx.setVariable("subject", subject);
+        ctx.setVariable("message", message);
+        ctx.setVariable("inquiriesUrl", SUPPORT_URL + "/admin/inquiries");
+        dispatch(adminEmail,
+                "📩 New Customer Inquiry: " + subject + " (" + name + ")",
+                "email/admin/new-inquiry-alert", ctx);
+    }
+
+    // =========================================================================
+    // 4. PRIVATE HELPERS
+    // =========================================================================
+
+    private void populatePricing(Context ctx, OrderEmailContext e) {
+        ctx.setVariable("subtotal", e.getSubtotal());
+        ctx.setVariable("subtotalFormatted", e.getSubtotalFormatted());
+        ctx.setVariable("discount", e.getDiscountAmount());
+        ctx.setVariable("discountFormatted", e.getDiscountFormatted());
+        ctx.setVariable("couponCode", e.getCouponCode());
+        ctx.setVariable("shippingFee", e.getShippingFee());
+        ctx.setVariable("shippingFormatted", e.getShippingFormatted());
+        ctx.setVariable("codFee", e.getCodHandlingFee());
+        ctx.setVariable("codFeeFormatted", e.getCodFeeFormatted());
+        ctx.setVariable("finalTotal", e.getFinalAmount());
+        ctx.setVariable("finalTotalFormatted", e.getFinalTotalFormatted());
+        ctx.setVariable("formulaText", e.getFormulaText());
+        ctx.setVariable("paymentMethodDisplay", e.getPaymentMethodDisplay());
+        ctx.setVariable("paymentStatus", e.getPaymentStatus());
+        ctx.setVariable("paymentStatusColor", e.getPaymentStatusColor());
+    }
+
+    private void populateItems(Context ctx, OrderEmailContext e) {
+        ctx.setVariable("orderItems", e.getOrderItems());
+    }
+
+    private void populateAddress(Context ctx, OrderEmailContext e) {
+        ctx.setVariable("hasShippingAddress", e.isHasShippingAddress());
+        ctx.setVariable("recipientName", e.getRecipientName());
+        ctx.setVariable("addressLine1", e.getAddressLine1());
+        ctx.setVariable("addressLine2", e.getAddressLine2());
+        ctx.setVariable("city", e.getCity());
+        ctx.setVariable("state", e.getState());
+        ctx.setVariable("postalCode", e.getPostalCode());
+        ctx.setVariable("country", e.getCountry());
+        ctx.setVariable("phoneNumber", e.getPhoneNumber());
+    }
+
+    private void dispatch(String to, String subject, String templatePath, Context ctx) {
         if (to == null || to.isBlank() || !to.contains("@")) {
-            log.warn("Skipping email dispatch: Invalid recipient address '{}'", to);
+            log.warn("Skipping email: invalid recipient '{}'", to);
             return;
         }
-
         try {
-            context.setVariable("emailSubject", subject);
-            context.setVariable("supportUrl", SUPPORT_URL);
-
-            String htmlBody = templateEngine.process(templatePath, context);
-
-            MimeMessage mimeMessage = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
+            ctx.setVariable("emailSubject", subject);
+            ctx.setVariable("supportUrl", SUPPORT_URL);
+            String html = templateEngine.process(templatePath, ctx);
+            MimeMessage msg = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(msg, true, "UTF-8");
             helper.setFrom(fromEmail, STORE_NAME);
             helper.setTo(to);
             helper.setSubject(subject);
-            helper.setText(htmlBody, true);
-
-            mailSender.send(mimeMessage);
-            log.info("Successfully dispatched transactional template email '{}' to {}", subject, maskEmail(to));
+            helper.setText(html, true);
+            mailSender.send(msg);
+            log.info("Email dispatched: '{}' → {}", subject, maskEmail(to));
         } catch (Exception e) {
-            log.error("Failed to send transactional template email '{}' to {}: {}", subject, maskEmail(to), e.getMessage());
+            log.error("Failed to dispatch email '{}' → {}: {}", subject, maskEmail(to), e.getMessage());
         }
     }
 
-    private void populateOrderItemsContext(Context ctx, Order order) {
-        List<OrderItemView> items = new ArrayList<>();
-        if (order.getOrderItems() != null) {
-            for (OrderItem item : order.getOrderItems()) {
-                String name = "Handloom Saree";
-                String variant = "";
-                if (item.getProductVariant() != null) {
-                    if (item.getProductVariant().getProduct() != null) {
-                        name = item.getProductVariant().getProduct().getName();
-                    }
-                    String size = item.getProductVariant().getSize() != null ? item.getProductVariant().getSize() : "";
-                    String color = item.getProductVariant().getColor() != null ? item.getProductVariant().getColor() : "";
-                    variant = (size + " " + color).trim();
-                }
-                BigDecimal unitPrice = item.getPrice() != null ? item.getPrice() : BigDecimal.ZERO;
-                BigDecimal totalPrice = unitPrice.multiply(BigDecimal.valueOf(item.getQuantity()));
-                items.add(OrderItemView.builder()
-                        .productName(name)
-                        .variantInfo(variant)
-                        .quantity(item.getQuantity())
-                        .unitPrice(unitPrice)
-                        .unitPriceFormatted(formatCurrency(unitPrice))
-                        .totalPrice(totalPrice)
-                        .totalPriceFormatted(formatCurrency(totalPrice))
-                        .build());
-            }
-        }
-        ctx.setVariable("orderItems", items);
-    }
-
-    private void populatePriceBreakdownContext(Context ctx, Order order) {
-        BigDecimal subtotal = order.getSubtotal() != null ? order.getSubtotal() : BigDecimal.ZERO;
-        BigDecimal discount = order.getDiscountAmount() != null ? order.getDiscountAmount() : BigDecimal.ZERO;
-        BigDecimal shipping = order.getShippingFee() != null ? order.getShippingFee() : BigDecimal.ZERO;
-        BigDecimal codFee = order.getCodHandlingFee() != null ? order.getCodHandlingFee() : BigDecimal.ZERO;
-        BigDecimal finalTotal = order.getFinalAmount() != null ? order.getFinalAmount() : subtotal.subtract(discount).add(shipping).add(codFee);
-        if (finalTotal.compareTo(BigDecimal.ZERO) < 0) finalTotal = BigDecimal.ZERO;
-
-        ctx.setVariable("subtotal", subtotal);
-        ctx.setVariable("subtotalFormatted", formatCurrency(subtotal));
-        ctx.setVariable("discount", discount);
-        ctx.setVariable("discountFormatted", formatCurrency(discount));
-        ctx.setVariable("couponCode", order.getCouponCode());
-        ctx.setVariable("shippingFee", shipping);
-        ctx.setVariable("shippingFormatted", formatCurrency(shipping));
-        ctx.setVariable("codFee", codFee);
-        ctx.setVariable("codFeeFormatted", formatCurrency(codFee));
-        ctx.setVariable("finalTotal", finalTotal);
-        ctx.setVariable("finalTotalFormatted", formatCurrency(finalTotal));
-
-        // Explicit formula: e.g. Subtotal ₹2,000.00 - Discount ₹100.00 + Shipping ₹0.00 + COD ₹200.00 = ₹2,100.00
-        StringBuilder formula = new StringBuilder("Subtotal ").append(formatCurrency(subtotal));
-        if (discount.compareTo(BigDecimal.ZERO) > 0) {
-            formula.append(" - Discount ").append(formatCurrency(discount));
-        }
-        if (shipping.compareTo(BigDecimal.ZERO) > 0) {
-            formula.append(" + Shipping ").append(formatCurrency(shipping));
-        } else {
-            formula.append(" + Shipping ₹0.00 (FREE)");
-        }
-        if (codFee.compareTo(BigDecimal.ZERO) > 0) {
-            formula.append(" + COD Fee ").append(formatCurrency(codFee));
-        }
-        formula.append(" = ").append(formatCurrency(finalTotal));
-        ctx.setVariable("formulaText", formula.toString());
-
-        String methodDisplay = "COD".equalsIgnoreCase(order.getPaymentMethod()) ? "Cash on Delivery (COD)"
-                : "RAZORPAY".equalsIgnoreCase(order.getPaymentMethod()) ? "Online Payment (Razorpay)"
-                : "WHATSAPP_UPI".equalsIgnoreCase(order.getPaymentMethod()) ? "WhatsApp Direct UPI"
-                : "DIRECT_BANK".equalsIgnoreCase(order.getPaymentMethod()) ? "Direct Bank Transfer (NEFT/RTGS)"
-                : order.getPaymentMethod() != null ? order.getPaymentMethod() : "Direct Payment";
-        ctx.setVariable("paymentMethodDisplay", methodDisplay);
-        ctx.setVariable("paymentStatus", order.getPaymentStatus());
-        ctx.setVariable("paymentStatusColor", "PAID".equalsIgnoreCase(order.getPaymentStatus()) ? "#27ae60" : "#d35400");
-    }
-
-    private void populateAddressContext(Context ctx, ShippingAddress addr) {
-        if (addr == null) {
-            ctx.setVariable("hasShippingAddress", false);
-            return;
-        }
-        ctx.setVariable("hasShippingAddress", true);
-        ctx.setVariable("recipientName", addr.getFullName() != null ? addr.getFullName() : "");
-        ctx.setVariable("addressLine1", addr.getAddressLine1() != null ? addr.getAddressLine1() : "");
-        ctx.setVariable("addressLine2", addr.getAddressLine2());
-        ctx.setVariable("city", addr.getCity() != null ? addr.getCity() : "");
-        ctx.setVariable("state", addr.getState() != null ? addr.getState() : "");
-        ctx.setVariable("postalCode", addr.getPostalCode() != null ? addr.getPostalCode() : "");
-        ctx.setVariable("country", addr.getCountry() != null ? addr.getCountry() : "India");
-        ctx.setVariable("phoneNumber", addr.getPhoneNumber() != null ? addr.getPhoneNumber() : "");
-    }
-
-    private String formatCurrency(BigDecimal amount) {
-        if (amount == null) return "₹0.00";
-        return INR_FORMAT.format(amount);
+    private String safe(String value, String fallback) {
+        return (value != null && !value.isBlank()) ? value : fallback;
     }
 
     private String maskEmail(String email) {
         if (email == null || !email.contains("@")) return "******";
         String[] parts = email.split("@");
         String name = parts[0];
-        String domain = parts[1];
-        if (name.length() <= 2) return name.charAt(0) + "***@" + domain;
-        return name.charAt(0) + "***" + name.charAt(name.length() - 1) + "@" + domain;
-    }
-
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class OrderItemView {
-        private String productName;
-        private String variantInfo;
-        private int quantity;
-        private BigDecimal unitPrice;
-        private String unitPriceFormatted;
-        private BigDecimal totalPrice;
-        private String totalPriceFormatted;
+        if (name.length() <= 2) return name.charAt(0) + "***@" + parts[1];
+        return name.charAt(0) + "***" + name.charAt(name.length() - 1) + "@" + parts[1];
     }
 }

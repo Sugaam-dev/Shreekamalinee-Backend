@@ -4,7 +4,9 @@ import com.pmrgsolution.Exception.ResourceNotFoundException;
 import com.pmrgsolution.Exception.BusinessException;
 import com.pmrgsolution.features.auth.entity.User;
 import com.pmrgsolution.features.auth.repository.UserRepository;
+import com.pmrgsolution.features.catalog.entity.Product;
 import com.pmrgsolution.features.catalog.entity.ProductVariant;
+import com.pmrgsolution.features.catalog.repository.ProductRepository;
 import com.pmrgsolution.features.catalog.repository.ProductVariantRepository;
 import com.pmrgsolution.features.cart.dto.*;
 import com.pmrgsolution.features.cart.entity.*;
@@ -26,6 +28,7 @@ public class CartServiceImpl implements CartService {
     private final CartRepository cartRepository;
     private final CartItemRepository cartItemRepository;
     private final ProductVariantRepository productVariantRepository;
+    private final ProductRepository productRepository;
     private final UserRepository userRepository;
 
     @Override
@@ -39,10 +42,21 @@ public class CartServiceImpl implements CartService {
     @Transactional
     public CartDTO addItemToCart(UUID userId, AddToCartRequest request) {
         Cart cart = getOrCreateCart(userId);
+        
+        // 1. Resolve variant either directly by variantId or by productId fallback
         ProductVariant variant = productVariantRepository.findById(request.getVariantId())
-                .orElseThrow(() -> new ResourceNotFoundException("Product Variant not found"));
+                .orElseGet(() -> {
+                    // Fallback: check if the given UUID is a Product ID
+                    Optional<Product> prodOpt = productRepository.findById(request.getVariantId());
+                    if (prodOpt.isPresent() && prodOpt.get().getVariants() != null && !prodOpt.get().getVariants().isEmpty()) {
+                        return prodOpt.get().getVariants().get(0);
+                    }
+                    throw new ResourceNotFoundException("Product Variant not found for ID: " + request.getVariantId());
+                });
 
-        if (variant.getStockQuantity() < request.getQuantity()) {
+        int requestedQty = (request.getQuantity() != null && request.getQuantity() > 0) ? request.getQuantity() : 1;
+
+        if (variant.getStockQuantity() != null && variant.getStockQuantity() < requestedQty) {
             throw new BusinessException("Requested quantity exceeds available stock (" + variant.getStockQuantity() + ")", HttpStatus.BAD_REQUEST);
         }
 
@@ -51,13 +65,13 @@ public class CartServiceImpl implements CartService {
         }
 
         Optional<CartItem> existingItemOpt = cart.getItems().stream()
-                .filter(i -> i.getProductVariant().getId().equals(variant.getId()))
+                .filter(i -> i.getProductVariant() != null && i.getProductVariant().getId().equals(variant.getId()))
                 .findFirst();
 
         if (existingItemOpt.isPresent()) {
             CartItem item = existingItemOpt.get();
-            int newQuantity = item.getQuantity() + request.getQuantity();
-            if (variant.getStockQuantity() < newQuantity) {
+            int newQuantity = item.getQuantity() + requestedQty;
+            if (variant.getStockQuantity() != null && variant.getStockQuantity() < newQuantity) {
                 throw new BusinessException("Total cart quantity exceeds available stock (" + variant.getStockQuantity() + ")", HttpStatus.BAD_REQUEST);
             }
             item.setQuantity(newQuantity);
@@ -65,7 +79,7 @@ public class CartServiceImpl implements CartService {
             CartItem newItem = CartItem.builder()
                     .cart(cart)
                     .productVariant(variant)
-                    .quantity(request.getQuantity())
+                    .quantity(requestedQty)
                     .build();
             cart.getItems().add(newItem);
         }

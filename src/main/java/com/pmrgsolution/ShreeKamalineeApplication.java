@@ -1,19 +1,19 @@
 package com.pmrgsolution;
 
+import io.github.cdimascio.dotenv.Dotenv;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.data.web.config.EnableSpringDataWebSupport;
-import org.springframework.scheduling.annotation.EnableAsync;
-import org.springframework.scheduling.annotation.EnableScheduling;
+
+import java.io.File;
 
 @SpringBootApplication
-@EnableScheduling
-@EnableAsync
-@EnableSpringDataWebSupport(pageSerializationMode = EnableSpringDataWebSupport.PageSerializationMode.VIA_DTO)
 public class ShreeKamalineeApplication {
 
 	public static void main(String[] args) {
+		String envDir = new File("ShreeKamalinee_Backend/.env").exists() ? "ShreeKamalinee_Backend" : ".";
+		Dotenv.configure().directory(envDir).ignoreIfMissing().load().entries()
+				.forEach(e -> System.setProperty(e.getKey(), e.getValue()));
+
 		SpringApplication.run(ShreeKamalineeApplication.class, args);
 	}
-
 }

@@ -12,6 +12,7 @@ import java.util.List;
 public class AdminDashboardResponse {
     private long totalOrders;
     private long pendingOrders;
+    private long pendingPaymentVerification; // orders with status = PAYMENT_PROOF_SUBMITTED
     private long deliveredOrders;
     private BigDecimal totalRevenue;
     private long totalProducts;

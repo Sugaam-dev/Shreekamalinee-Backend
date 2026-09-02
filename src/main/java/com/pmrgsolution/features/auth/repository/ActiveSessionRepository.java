@@ -16,6 +16,8 @@ public interface ActiveSessionRepository extends JpaRepository<ActiveSession, Lo
     Optional<ActiveSession> findBySessionId(UUID sessionId);
     
     Optional<ActiveSession> findByRefreshToken(String refreshToken);
+    
+    Optional<ActiveSession> findByPreviousRefreshToken(String previousRefreshToken);
 
     @Modifying
     @Transactional

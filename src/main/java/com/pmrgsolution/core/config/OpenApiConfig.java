@@ -1,5 +1,6 @@
 package com.pmrgsolution.core.config;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -10,6 +11,7 @@ import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
 
 @Configuration
+@ConditionalOnProperty(name = "springdoc.api-docs.enabled", havingValue = "true", matchIfMissing = true)
 public class OpenApiConfig {
 
     @Bean
@@ -17,9 +19,9 @@ public class OpenApiConfig {
         final String securitySchemeName = "bearerAuth";
         return new OpenAPI()
                 .info(new Info()
-                        .title("Renaissance API")
+                        .title("Shreekamalinee API")
                         .version("1.0")
-                        .description("Secure Authentication & Survey Analytics Platform API Documentation"))
+                        .description("Shreekamalinee Royal Handloom E-Commerce Backend API Documentation"))
                 .addSecurityItem(new SecurityRequirement().addList(securitySchemeName))
                 .components(new Components()
                         .addSecuritySchemes(securitySchemeName,

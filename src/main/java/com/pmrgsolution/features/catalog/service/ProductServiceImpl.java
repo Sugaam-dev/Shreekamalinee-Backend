@@ -81,8 +81,15 @@ public class ProductServiceImpl implements ProductService {
                 .replaceAll("[^a-zA-Z0-9\\s]", "")
                 .replace(" ", "-");
 
-        if (categoryRepository.findBySlug(safeSlug).isPresent()) {
-            throw new BusinessException("Category with slug '" + safeSlug + "' already exists", HttpStatus.CONFLICT);
+        // Slug uniqueness is scoped to the same parent — the same slug CAN exist
+        // under different parents (e.g. 'ikat' under Sarees AND under Dress Materials)
+        boolean slugConflict = (parent != null)
+                ? categoryRepository.existsBySlugAndParentCategory(safeSlug, parent)
+                : categoryRepository.existsBySlugAndParentCategoryIsNull(safeSlug);
+        if (slugConflict) {
+            String scope = (parent != null) ? "under parent '" + parent.getName() + "'" : "among root categories";
+            throw new BusinessException(
+                    "A category with slug '" + safeSlug + "' already exists " + scope, HttpStatus.CONFLICT);
         }
 
         List<String> suggestedAttributes = request.getSuggestedAttributes();
@@ -107,26 +114,38 @@ public class ProductServiceImpl implements ProductService {
         Category category = categoryRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Category not found"));
 
-        if (request.getName() != null && !request.getName().isBlank()) {
-            category.setName(request.getName().trim());
-        }
-
-        if (request.getSlug() != null && !request.getSlug().isBlank()) {
-            String safeSlug = request.getSlug().toLowerCase().trim()
-                    .replaceAll("[^a-zA-Z0-9\\s]", "")
-                    .replace(" ", "-");
-            category.setSlug(safeSlug);
-        } else if (request.getName() != null && !request.getName().isBlank()) {
-            String safeSlug = request.getName().toLowerCase().trim()
-                    .replaceAll("[^a-zA-Z0-9\\s]", "")
-                    .replace(" ", "-");
-            category.setSlug(safeSlug);
-        }
-
+        Category parent = category.getParentCategory();
         if (request.getParentId() != null) {
-            Category parent = categoryRepository.findById(request.getParentId())
+            parent = categoryRepository.findById(request.getParentId())
                     .orElseThrow(() -> new ResourceNotFoundException("Parent Category not found"));
             category.setParentCategory(parent);
+        }
+
+        String safeSlug = null;
+        if (request.getSlug() != null && !request.getSlug().isBlank()) {
+            safeSlug = request.getSlug().toLowerCase().trim()
+                    .replaceAll("[^a-zA-Z0-9\\s]", "")
+                    .replace(" ", "-");
+        } else if (request.getName() != null && !request.getName().isBlank()) {
+            safeSlug = request.getName().toLowerCase().trim()
+                    .replaceAll("[^a-zA-Z0-9\\s]", "")
+                    .replace(" ", "-");
+        }
+
+        if (safeSlug != null) {
+            boolean slugConflict = (parent != null)
+                    ? categoryRepository.existsBySlugAndParentCategoryAndIdNot(safeSlug, parent, id)
+                    : categoryRepository.existsBySlugAndParentCategoryIsNullAndIdNot(safeSlug, id);
+            if (slugConflict) {
+                String scope = (parent != null) ? "under parent '" + parent.getName() + "'" : "among root categories";
+                throw new BusinessException(
+                        "A category with slug '" + safeSlug + "' already exists " + scope, HttpStatus.CONFLICT);
+            }
+            category.setSlug(safeSlug);
+        }
+
+        if (request.getName() != null && !request.getName().isBlank()) {
+            category.setName(request.getName().trim());
         }
 
         if (request.getImageUrl() != null) {
@@ -206,10 +225,30 @@ public class ProductServiceImpl implements ProductService {
             stream = stream.filter(p -> p.getSeason() != null && p.getSeason().equalsIgnoreCase(season.trim()));
         }
 
-        // 4. Text Search (Matches Product Name or Description case-insensitively)
+        // 4. Text Search (Matches Name, Description, Brand, SKU, Category, and Parent Category)
         if (search != null && !search.isBlank()) {
             String q = search.toLowerCase().trim();
-            stream = stream.filter(p -> p.getName().toLowerCase().contains(q) || (p.getDescription() != null && p.getDescription().toLowerCase().contains(q)));
+            String[] tokens = q.split("\\s+");
+            stream = stream.filter(p -> {
+                String catName = p.getCategory() != null && p.getCategory().getName() != null ? p.getCategory().getName() : "";
+                String parentCatName = (p.getCategory() != null && p.getCategory().getParentCategory() != null && p.getCategory().getParentCategory().getName() != null)
+                        ? p.getCategory().getParentCategory().getName()
+                        : "";
+                String searchable = String.join(" ",
+                        p.getName() != null ? p.getName() : "",
+                        p.getDescription() != null ? p.getDescription() : "",
+                        p.getBrand() != null ? p.getBrand() : "",
+                        p.getSku() != null ? p.getSku() : "",
+                        catName,
+                        parentCatName
+                ).toLowerCase();
+
+                if (searchable.contains(q)) return true;
+                for (String token : tokens) {
+                    if (!searchable.contains(token)) return false;
+                }
+                return true;
+            });
         }
 
         // 5. Price Bracket Range (Uses offerPrice if present, else originalPrice)

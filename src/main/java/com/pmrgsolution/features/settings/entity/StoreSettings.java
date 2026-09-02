@@ -63,6 +63,10 @@ public class StoreSettings {
     private BigDecimal codHandlingFee = BigDecimal.valueOf(99.00);
 
     @Builder.Default
+    @Column(name = "free_cod_threshold", precision = 10, scale = 2)
+    private BigDecimal freeCodThreshold = BigDecimal.valueOf(2999.00);
+
+    @Builder.Default
     @Column(name = "is_free_shipping_promo_active", columnDefinition = "BOOLEAN DEFAULT FALSE")
     private Boolean isFreeShippingPromoActive = false;
 
@@ -94,6 +98,10 @@ public class StoreSettings {
     @Builder.Default
     @Column(name = "is_cod_payment_active", columnDefinition = "BOOLEAN DEFAULT TRUE")
     private Boolean isCodPaymentActive = true;
+
+    @Builder.Default
+    @Column(name = "is_whatsapp_order_active", columnDefinition = "BOOLEAN DEFAULT TRUE")
+    private Boolean isWhatsappOrderActive = true;
 
     // --- Dynamic Delivery SLA & Turnaround (Business Days) ---
     @Builder.Default

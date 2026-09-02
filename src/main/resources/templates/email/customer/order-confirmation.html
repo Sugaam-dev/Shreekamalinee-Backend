@@ -3,29 +3,43 @@
 <body>
   <div th:replace="~{email/layout/base-layout :: main(~{::#orderConfirmContent})}">
     <div id="orderConfirmContent">
-      <div style="text-align: center; margin-bottom: 25px;">
-        <div style="display: inline-block; padding: 6px 16px; background-color: #e8f8f0; color: #27ae60; border-radius: 20px; font-weight: 700; font-size: 13px;">ORDER CONFIRMED</div>
-        <h2 style="color: #7b121c; margin: 10px 0 5px; font-family: Georgia, serif;">Thank You For Your Order!</h2>
-        <p style="color: #666; margin: 0; font-size: 14px;">Order Reference: <strong th:text="${orderNumber}">SK-2026-0001</strong></p>
+      <div style="text-align: center; margin-bottom: 26px;">
+        <div style="display: inline-block; padding: 4px 16px; background-color: #ECFDF5; color: #059669; border: 1px solid #A7F3D0; border-radius: 20px; font-weight: 700; font-size: 11.5px; letter-spacing: 1px; text-transform: uppercase;">
+          ✓ Order Confirmed
+        </div>
+        <h2 style="color: #800020; margin: 12px 0 6px; font-family: 'Playfair Display', Georgia, serif; font-size: 23px;">Thank You For Your Patronage!</h2>
+        <p style="color: #7A6F68; margin: 0; font-size: 13.5px;">Order Reference: <strong style="color: #221D1B;" th:text="${orderNumber}">SK-2026-0001</strong></p>
       </div>
 
       <p>Namaste <strong th:text="${customerName}">Valued Patron</strong>,</p>
-      <p>We have received your luxury handloom order and our master weavers & artisans are carefully preparing it for dispatch.</p>
+      <p>We are delighted to confirm your order. Our master weavers and artisanal dispatch unit have received your request and are meticulously inspecting every weave before dispatch.</p>
 
-      <div style="margin: 25px 0;">
-        <h3 style="color: #7b121c; border-bottom: 2px solid #f1f1f1; padding-bottom: 8px; font-size: 16px; font-family: Georgia, serif;">Ordered Items</h3>
+      <div style="margin: 24px 0 10px;">
+        <h3 style="color: #800020; border-bottom: 1px solid #EADBCE; padding-bottom: 8px; font-size: 15px; font-weight: 700; font-family: 'Playfair Display', Georgia, serif; text-transform: uppercase; letter-spacing: 0.5px;">
+          Ordered Handlooms
+        </h3>
         <div th:replace="~{email/components/items-table :: itemsTable}"></div>
       </div>
 
       <!-- Financial & Cost Breakdown Fragment -->
       <div th:replace="~{email/components/price-breakdown :: breakdown}"></div>
 
-      <div style="margin: 25px 0;" th:if="${hasShippingAddress}">
-        <h3 style="color: #7b121c; border-bottom: 2px solid #f1f1f1; padding-bottom: 8px; font-size: 16px; font-family: Georgia, serif;">Delivery Destination</h3>
+      <div style="margin: 22px 0 10px;" th:if="${hasShippingAddress}">
+        <h3 style="color: #800020; border-bottom: 1px solid #EADBCE; padding-bottom: 8px; font-size: 15px; font-weight: 700; font-family: 'Playfair Display', Georgia, serif; text-transform: uppercase; letter-spacing: 0.5px;">
+          Delivery Destination
+        </h3>
         <div th:replace="~{email/components/address-block :: addressBlock}"></div>
       </div>
 
-      <p style="color: #777; font-size: 13px;">You will receive an update with live courier tracking details as soon as your saree is dispatched.</p>
+      <div style="text-align: center; margin: 28px 0 10px;">
+        <a th:href="${(supportUrl ?: 'https://www.shreekamalinee.com') + '/account/orders'}" class="cta-btn">
+          VIEW ORDER & LIVE TRACKING →
+        </a>
+      </div>
+
+      <p style="color: #8A7E77; font-size: 12.5px; text-align: center; margin-top: 18px;">
+        You will receive an automated dispatch notification with consignment tracking as soon as your parcel is handed to our courier partner.
+      </p>
     </div>
   </div>
 </body>

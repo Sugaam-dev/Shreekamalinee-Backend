@@ -13,5 +13,6 @@ public interface CouponService {
     List<CouponResponse> getAllCoupons();
     void deleteCoupon(UUID id);
     CouponValidationResponse validateCoupon(String code, BigDecimal subtotal, UUID userId);
+    CouponValidationResponse validateCoupon(String code, BigDecimal subtotal, UUID userId, String userEmail);
     List<CouponUsageResponse> getCouponUsages(UUID couponId);
 }
