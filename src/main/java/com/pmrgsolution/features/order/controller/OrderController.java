@@ -9,6 +9,10 @@ import com.pmrgsolution.features.settings.dto.StoreSettingsResponse;
 import com.pmrgsolution.features.settings.service.StoreSettingsService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -59,8 +63,12 @@ public class OrderController {
     }
 
     @GetMapping
-    public ResponseEntity<List<OrderResponse>> getUserOrders(@AuthenticationPrincipal CustomUserDetails user) {
-        return ResponseEntity.ok(orderService.getUserOrders(user.getId()));
+    public ResponseEntity<Page<OrderResponse>> getUserOrders(
+            @AuthenticationPrincipal CustomUserDetails user,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+        return ResponseEntity.ok(orderService.getUserOrders(user.getId(), pageable));
     }
 
     @GetMapping("/{orderId}")

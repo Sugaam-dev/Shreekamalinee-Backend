@@ -137,10 +137,14 @@ public class AuthServiceImpl implements AuthService {
             NetHttpTransport transport = new NetHttpTransport();
             GsonFactory jsonFactory = GsonFactory.getDefaultInstance();
 
-            GoogleIdTokenVerifier.Builder verifierBuilder = new GoogleIdTokenVerifier.Builder(transport, jsonFactory);
-            if (!trimmedClientId.isEmpty() && !"google_client_id_placeholder".equals(trimmedClientId)) {
-                verifierBuilder.setAudience(Collections.singletonList(trimmedClientId));
+            // SECURITY FIX: Always validate audience — never skip the audience check.
+            // Removing the placeholder bypass prevents tokens issued for other Google apps
+            // from being accepted here (cross-app token replay attack).
+            if (trimmedClientId.isEmpty() || "google_client_id_placeholder".equals(trimmedClientId)) {
+                throw new BusinessException("Google authentication is not properly configured on this server.", HttpStatus.INTERNAL_SERVER_ERROR);
             }
+            GoogleIdTokenVerifier.Builder verifierBuilder = new GoogleIdTokenVerifier.Builder(transport, jsonFactory);
+            verifierBuilder.setAudience(Collections.singletonList(trimmedClientId));
             GoogleIdTokenVerifier verifier = verifierBuilder.build();
 
             // Cryptographic signature verification — the ONLY accepted path
@@ -240,7 +244,7 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByEmailIgnoreCase(request.getEmail())
                 .orElseThrow(() -> new BusinessException("User not found.", HttpStatus.NOT_FOUND));
 
-        UserEmailOtp emailOtp = emailOtpRepository.findByUserAndEmailOtpAndIsUsedFalse(user, request.getOtp())
+        UserEmailOtp emailOtp = emailOtpRepository.findByUserAndEmailOtpAndIsUsedFalse(user, hashOtp(request.getOtp()))
                 .orElseThrow(() -> new BusinessException("Invalid/Expired OTP.", HttpStatus.BAD_REQUEST));
         
         if (emailOtp.getExpiresAt().isBefore(OffsetDateTime.now())) {
@@ -444,7 +448,7 @@ public class AuthServiceImpl implements AuthService {
         String otp = otpGenerator.generateOtp();
         UserEmailOtp emailOtp = UserEmailOtp.builder()
                 .user(user)
-                .emailOtp(otp)
+                .emailOtp(hashOtp(otp))
                 .expiresAt(OffsetDateTime.now().plusMinutes(10))
                 .isUsed(false)
                 .isVerified(false)
@@ -461,7 +465,7 @@ public class AuthServiceImpl implements AuthService {
             String otp = otpGenerator.generateOtp();
             ForgotPassword fp = ForgotPassword.builder()
                     .user(user)
-                    .otp(otp)
+                    .otp(hashOtp(otp))
                     .isUsed(false)
                     .expiresAt(OffsetDateTime.now().plusMinutes(10))
                     .createdAt(OffsetDateTime.now())
@@ -479,8 +483,14 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByEmailIgnoreCase(request.getEmail().trim())
                 .orElseThrow(() -> new BusinessException("Invalid request.", HttpStatus.BAD_REQUEST));
 
-        ForgotPassword fp = forgotPasswordRepository.findByUserAndOtpAndIsUsedFalse(user, request.getOtp())
+        ForgotPassword fp = forgotPasswordRepository.findByUserAndOtpAndIsUsedFalse(user, hashOtp(request.getOtp()))
                 .orElseThrow(() -> new BusinessException("Invalid/Expired OTP.", HttpStatus.BAD_REQUEST));
+
+        // SECURITY FIX: Validate OTP expiry — matches the same check in verifyOtp().
+        // Previously, expired password reset OTPs could still be used indefinitely.
+        if (fp.getExpiresAt().isBefore(java.time.OffsetDateTime.now())) {
+            throw new BusinessException("OTP has expired. Please request a new password reset.", HttpStatus.BAD_REQUEST);
+        }
 
         fp.setUsed(true);
         forgotPasswordRepository.save(fp);
@@ -528,6 +538,21 @@ public class AuthServiceImpl implements AuthService {
             sessionRepository.findBySessionId(id).ifPresent(sessionRepository::delete);
         } catch (Exception e) {
             log.warn("Invalid session ID format: {}", sessionId);
+        }
+    }
+
+    private String hashOtp(String otp) {
+        if (otp == null) return null;
+        try {
+            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(otp.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder();
+            for (byte b : hash) {
+                hex.append(String.format("%02x", b));
+            }
+            return hex.toString();
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new RuntimeException("SHA-256 not available", e);
         }
     }
 }

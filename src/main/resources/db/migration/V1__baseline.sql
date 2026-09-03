@@ -1,0 +1,4 @@
+-- V1__baseline.sql
+-- Baseline: Existing production schema applied manually via Hibernate ddl-auto=update.
+-- All tables and indexes already exist. Flyway will mark this as applied and move on.
+-- Future schema changes go in V2, V3, etc.

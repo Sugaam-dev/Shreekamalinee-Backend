@@ -16,10 +16,15 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Enterprise 3-Tier Proxy-Aware Rate Limiting Filter.
- * 
+ * Enterprise 3-Tier Rate Limiting Filter.
+ *
  * Protects critical endpoints from credential stuffing & DDoS while guaranteeing
  * zero false lockouts (HTTP 429) for legitimate customers and administrators.
+ *
+ * IP Resolution: Since forward-headers-strategy=framework is configured in application.yml,
+ * Spring's ForwardedHeaderFilter rewrites request.getRemoteAddr() to the real client IP
+ * (from CF-Connecting-IP or X-Forwarded-For set by the trusted reverse proxy).
+ * We use request.getRemoteAddr() directly — clients cannot forge their IP this way.
  */
 @Slf4j
 @Component
@@ -62,15 +67,19 @@ public class RateLimitingFilter implements Filter {
         String uri = httpRequest.getRequestURI();
 
         // Whitelist webhooks, actuator probes, and swagger docs from rate limiting
-        if (uri.startsWith("/api/v1/orders/razorpay/webhook") || 
-            uri.startsWith("/actuator/") || 
-            uri.startsWith("/v3/api-docs") || 
+        if (uri.startsWith("/api/v1/orders/razorpay/webhook") ||
+            uri.startsWith("/actuator/") ||
+            uri.startsWith("/v3/api-docs") ||
             uri.startsWith("/swagger-ui")) {
             chain.doFilter(request, response);
             return;
         }
 
-        String ip = getClientIP(httpRequest);
+        // SECURITY FIX: Use request.getRemoteAddr() only.
+        // Spring's ForwardedHeaderFilter (enabled via forward-headers-strategy=framework)
+        // has already resolved the real client IP from the trusted proxy headers.
+        // Clients cannot forge this value — it is set by the server-side framework, not the client.
+        String ip = httpRequest.getRemoteAddr();
         String tier = determineTier(uri);
         String cacheKey = ip + ":" + tier;
 
@@ -95,7 +104,7 @@ public class RateLimitingFilter implements Filter {
             long retryAfterSeconds = Math.max(1, probe.getNanosToWaitForRefill() / 1_000_000_000L);
             httpResponse.setHeader("x-rate-limit-retry-after", String.valueOf(retryAfterSeconds));
             httpResponse.getWriter().write(
-                    "{\"error\": \"Too Many Requests\", \"message\": \"Rate limit exceeded. Please try again after " 
+                    "{\"error\": \"Too Many Requests\", \"message\": \"Rate limit exceeded. Please try again after "
                     + retryAfterSeconds + " seconds.\"}"
             );
         }
@@ -181,27 +190,5 @@ public class RateLimitingFilter implements Filter {
                         .refillGreedy(360, Duration.ofMinutes(1))
                         .build())
                 .build();
-    }
-
-    /**
-     * Extracts client real IP behind Cloudflare, Nginx, or Docker reverse proxies.
-     */
-    private String getClientIP(HttpServletRequest request) {
-        String cfIp = request.getHeader("CF-Connecting-IP");
-        if (cfIp != null && !cfIp.isBlank()) {
-            return cfIp.trim();
-        }
-
-        String xfHeader = request.getHeader("X-Forwarded-For");
-        if (xfHeader != null && !xfHeader.isBlank()) {
-            return xfHeader.split(",")[0].trim();
-        }
-
-        String realIp = request.getHeader("X-Real-IP");
-        if (realIp != null && !realIp.isBlank()) {
-            return realIp.trim();
-        }
-
-        return request.getRemoteAddr();
     }
 }

@@ -35,11 +35,13 @@ import com.pmrgsolution.features.settings.dto.StoreSettingsResponse;
 import com.pmrgsolution.features.settings.service.StoreSettingsService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import com.pmrgsolution.features.payment.repository.TransactionRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -68,7 +70,8 @@ public class OrderServiceImpl implements OrderService {
     private final StoreSettingsService storeSettingsService;
     private final EmailService emailService;
     private final EmailUsageService emailUsageService;
-    private final com.pmrgsolution.features.payment.repository.TransactionRepository transactionRepository;
+    private final TransactionRepository transactionRepository;
+    private final PasswordEncoder passwordEncoder;
     private final org.springframework.data.redis.core.StringRedisTemplate redisTemplate;
 
     @Value("${app.admin.notification-email:${app.admin.email:admin@shreekamalinee.com}}")
@@ -87,10 +90,17 @@ public class OrderServiceImpl implements OrderService {
             try {
                 if (redisTemplate != null && redisTemplate.getConnectionFactory() != null) {
                     String redisKey = IDEMPOTENCY_KEY_PREFIX + idempotencyKey;
-                    Boolean alreadyProcessed = redisTemplate.hasKey(redisKey);
-                    if (Boolean.TRUE.equals(alreadyProcessed)) {
-                        log.info("Idempotency key already processed, rejecting duplicate: {}", idempotencyKey);
-                        throw new BusinessException("This order has already been placed. Please check your orders page.", org.springframework.http.HttpStatus.CONFLICT);
+                    // PERF FIX: Use atomic setIfAbsent (Redis SETNX) for idempotency.
+                    // The old hasKey() + set() pattern had a race window where two concurrent requests
+                    // could both pass the hasKey() check before either one called set().
+                    // setIfAbsent is atomic — only one caller wins, the other gets false.
+                    Boolean isNewRequest = redisTemplate.opsForValue().setIfAbsent(
+                            redisKey, "1", java.time.Duration.ofMinutes(30));
+
+                    if (Boolean.FALSE.equals(isNewRequest)) {
+                        // Another request with the same idempotency key already won
+                        log.warn("Duplicate order submission blocked by idempotency key: {}", idempotencyKey);
+                        throw new BusinessException("This order has already been submitted. Please refresh your order history.", HttpStatus.CONFLICT);
                     }
                 }
             } catch (BusinessException be) {
@@ -280,8 +290,8 @@ public class OrderServiceImpl implements OrderService {
         // Only record coupon usage if payment is confirmed (e.g. COD or immediate PAID)
         // For Manual UPI & Razorpay, coupon usage is recorded upon payment receipt upload / payment verification
         if (appliedCoupon != null && ("COD".equalsIgnoreCase(savedOrder.getPaymentMethod()) || "PAID".equalsIgnoreCase(savedOrder.getPaymentStatus()))) {
-            appliedCoupon.setTimesUsed(appliedCoupon.getTimesUsed() + 1);
-            couponRepository.save(appliedCoupon);
+            // SECURITY FIX: Use atomic DB-level increment to prevent race condition
+            couponRepository.incrementTimesUsed(appliedCoupon.getId());
 
             CouponUsage usage = CouponUsage.builder()
                     .coupon(appliedCoupon)
@@ -336,10 +346,9 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<OrderResponse> getUserOrders(UUID userId) {
-        return orderRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
-                .map(this::mapToResponse)
-                .collect(Collectors.toList());
+    public Page<OrderResponse> getUserOrders(UUID userId, Pageable pageable) {
+        return orderRepository.findByUserIdOrderByCreatedAtDesc(userId, pageable)
+                .map(this::mapToResponse);
     }
 
     @Override
@@ -387,7 +396,10 @@ public class OrderServiceImpl implements OrderService {
                             .enabled(true)
                             .accountNonLocked(true)
                             .provider(com.pmrgsolution.Constant.AuthProvider.LOCAL)
-                            .password(UUID.randomUUID().toString())
+                            // SECURITY FIX: Encode the random password with BCrypt.
+                            // Previously a raw UUID string was stored, violating the
+                            // encoding contract. The password is still random & unusable.
+                            .password(passwordEncoder.encode(UUID.randomUUID().toString()))
                             .build();
                     return userRepository.save(newUser);
                 });

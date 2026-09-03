@@ -47,7 +47,13 @@ public class PaymentServiceImpl implements PaymentService {
     private final CouponRepository couponRepository;
     private final CouponUsageRepository couponUsageRepository;
     private final com.pmrgsolution.features.order.service.OrderService orderService;
+    // FIX OPS-4: Inject the singleton RazorpayClient bean from RazorpayConfig.
+    // Previously, new RazorpayClient() was instantiated on every payment request —
+    // wasteful and incompatible with connection pooling.
+    private final RazorpayClient razorpayClient;
 
+    // razorpayKeyId is still needed to send to the frontend for Razorpay checkout initialization.
+    // razorpayKeySecret is still needed separately for HMAC signature verification of webhook/payment.
     @Value("${razorpay.key.id:rzp_test_placeholder}")
     private String razorpayKeyId;
 
@@ -68,7 +74,6 @@ public class PaymentServiceImpl implements PaymentService {
         }
 
         try {
-            RazorpayClient razorpayClient = new RazorpayClient(razorpayKeyId, razorpayKeySecret);
             JSONObject orderRequest = new JSONObject();
             orderRequest.put("amount", order.getFinalAmount().multiply(BigDecimal.valueOf(100)).intValue()); // in paise
             orderRequest.put("currency", "INR");
@@ -230,9 +235,8 @@ public class PaymentServiceImpl implements PaymentService {
         if (order.getCouponCode() != null && !order.getCouponCode().isBlank() && order.getUser() != null) {
             couponRepository.findByCodeIgnoreCase(order.getCouponCode().trim()).ifPresent(coupon -> {
                 if (couponUsageRepository.countByCouponIdAndUserId(coupon.getId(), order.getUser().getId()) == 0) {
-                    coupon.setTimesUsed(coupon.getTimesUsed() + 1);
-                    couponRepository.save(coupon);
-
+                    // SECURITY FIX: Use atomic DB-level increment to prevent race condition
+                    couponRepository.incrementTimesUsed(coupon.getId());
                     CouponUsage usage = CouponUsage.builder()
                             .coupon(coupon)
                             .user(order.getUser())

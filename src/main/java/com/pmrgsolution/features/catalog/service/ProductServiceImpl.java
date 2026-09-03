@@ -10,6 +10,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.pmrgsolution.core.service.FileStorageService;
@@ -201,110 +203,48 @@ public class ProductServiceImpl implements ProductService {
             Double minRating,
             Integer minDiscount,
             String sortBy) {
-        List<Product> products;
-        if (categoryId != null) {
-            products = productRepository.findByCategoryIdRecursive(categoryId);
+
+        Sort sort;
+        if ("newest".equalsIgnoreCase(sortBy)) {
+            sort = Sort.by(Sort.Direction.DESC, "createdAt");
+        } else if ("priceasc".equalsIgnoreCase(sortBy)) {
+            sort = Sort.by(Sort.Direction.ASC, "offerPrice");
+        } else if ("pricedesc".equalsIgnoreCase(sortBy)) {
+            sort = Sort.by(Sort.Direction.DESC, "offerPrice");
         } else {
-            products = productRepository.findAll();
+            sort = Sort.by(Sort.Direction.DESC, "createdAt");
         }
 
-        java.util.stream.Stream<Product> stream = products.stream();
+        Specification<Product> spec = ProductSpecifications.withFilters(
+                categoryId, gender, brand, search, season, minPrice, maxPrice, inStock);
 
-        // 1. Filter by Gender Category
-        if (gender != null && !gender.isBlank()) {
-            stream = stream.filter(p -> p.getGenderCategory() != null && p.getGenderCategory().equalsIgnoreCase(gender.trim()));
-        }
+        List<Product> products = productRepository.findAll(spec, sort);
 
-        // 2. Filter by Brand Name
-        if (brand != null && !brand.isBlank()) {
-            stream = stream.filter(p -> p.getBrand() != null && p.getBrand().equalsIgnoreCase(brand.trim()));
-        }
+        List<ProductDTO> result = products.stream()
+                .map(this::mapToProductDTO)
+                .collect(Collectors.toList());
 
-        // 3. Filter by Season Drop
-        if (season != null && !season.isBlank()) {
-            stream = stream.filter(p -> p.getSeason() != null && p.getSeason().equalsIgnoreCase(season.trim()));
-        }
-
-        // 4. Text Search (Matches Name, Description, Brand, SKU, Category, and Parent Category)
-        if (search != null && !search.isBlank()) {
-            String q = search.toLowerCase().trim();
-            String[] tokens = q.split("\\s+");
-            stream = stream.filter(p -> {
-                String catName = p.getCategory() != null && p.getCategory().getName() != null ? p.getCategory().getName() : "";
-                String parentCatName = (p.getCategory() != null && p.getCategory().getParentCategory() != null && p.getCategory().getParentCategory().getName() != null)
-                        ? p.getCategory().getParentCategory().getName()
-                        : "";
-                String searchable = String.join(" ",
-                        p.getName() != null ? p.getName() : "",
-                        p.getDescription() != null ? p.getDescription() : "",
-                        p.getBrand() != null ? p.getBrand() : "",
-                        p.getSku() != null ? p.getSku() : "",
-                        catName,
-                        parentCatName
-                ).toLowerCase();
-
-                if (searchable.contains(q)) return true;
-                for (String token : tokens) {
-                    if (!searchable.contains(token)) return false;
-                }
-                return true;
-            });
-        }
-
-        // 5. Price Bracket Range (Uses offerPrice if present, else originalPrice)
-        if (minPrice != null) {
-            stream = stream.filter(p -> {
-                BigDecimal activePrice = (p.getOfferPrice() != null && p.getOfferPrice().compareTo(BigDecimal.ZERO) > 0) ? p.getOfferPrice() : p.getOriginalPrice();
-                return activePrice != null && activePrice.compareTo(minPrice) >= 0;
-            });
-        }
-        if (maxPrice != null) {
-            stream = stream.filter(p -> {
-                BigDecimal activePrice = (p.getOfferPrice() != null && p.getOfferPrice().compareTo(BigDecimal.ZERO) > 0) ? p.getOfferPrice() : p.getOriginalPrice();
-                return activePrice != null && activePrice.compareTo(maxPrice) <= 0;
-            });
-        }
-
-        // 6. Stock Availability Filter
-        if (inStock != null) {
-            stream = stream.filter(p -> {
-                int totalStock = p.getVariants() != null ? p.getVariants().stream().mapToInt(ProductVariant::getStockQuantity).sum() : 0;
-                return inStock ? totalStock > 0 : totalStock == 0;
-            });
-        }
-
-        // 7. Sort by Newest (requires entity sorting before DTO map)
-        if (sortBy != null && sortBy.equalsIgnoreCase("newest")) {
-            stream = stream.sorted(java.util.Comparator.comparing(Product::getCreatedAt, java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder())));
-        }
-
-        // Map to DTOs (includes calculated discount percentage and average rating)
-        List<ProductDTO> mappedProducts = stream.map(this::mapToProductDTO).collect(Collectors.toList());
-
-        // 8. Filter by Minimum Discount Percentage (e.g. minDiscount=20 for 20% or more)
+        // Computed post-filters (rating and discount % are calculated)
         if (minDiscount != null && minDiscount > 0) {
-            mappedProducts = mappedProducts.stream()
+            result = result.stream()
                     .filter(p -> p.getDiscountPercentage() != null && p.getDiscountPercentage() >= minDiscount)
                     .collect(Collectors.toList());
         }
 
-        // 9. Filter by Minimum Customer Star Rating (e.g. minRating=4.0 for 4★ & above)
         if (minRating != null && minRating > 0.0) {
-            mappedProducts = mappedProducts.stream()
+            result = result.stream()
                     .filter(p -> p.getAverageRating() != null && p.getAverageRating() >= minRating)
                     .collect(Collectors.toList());
         }
 
-        // 10. Sort by Price (requires DTO sorting after map)
-        if (sortBy != null && !sortBy.isBlank()) {
-            if (sortBy.equalsIgnoreCase("priceasc")) {
-                mappedProducts.sort(java.util.Comparator.comparing(p -> p.getOfferPrice() != null && p.getOfferPrice().compareTo(BigDecimal.ZERO) > 0 ? p.getOfferPrice() : p.getOriginalPrice()));
-            } else if (sortBy.equalsIgnoreCase("pricedesc")) {
-                mappedProducts.sort(java.util.Comparator.<ProductDTO, BigDecimal>comparing(p -> p.getOfferPrice() != null && p.getOfferPrice().compareTo(BigDecimal.ZERO) > 0 ? p.getOfferPrice() : p.getOriginalPrice()).reversed());
-            }
+        // Exact effective price sort on DTO if priceasc/pricedesc requested
+        if ("priceasc".equalsIgnoreCase(sortBy)) {
+            result.sort(java.util.Comparator.comparing(p -> p.getOfferPrice() != null && p.getOfferPrice().compareTo(BigDecimal.ZERO) > 0 ? p.getOfferPrice() : p.getOriginalPrice()));
+        } else if ("pricedesc".equalsIgnoreCase(sortBy)) {
+            result.sort(java.util.Comparator.<ProductDTO, BigDecimal>comparing(p -> p.getOfferPrice() != null && p.getOfferPrice().compareTo(BigDecimal.ZERO) > 0 ? p.getOfferPrice() : p.getOriginalPrice()).reversed());
         }
 
-        return mappedProducts;
+        return result;
     }
 
     @Override

@@ -20,6 +20,8 @@ import java.time.LocalDateTime;
 import com.pmrgsolution.features.coupon.dto.CouponUsageResponse;
 import com.pmrgsolution.features.order.repository.OrderRepository;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -80,14 +82,26 @@ public class CouponServiceImpl implements CouponService {
         if (!couponRepository.existsById(couponId)) {
             throw new ResourceNotFoundException("Coupon not found");
         }
-        return couponUsageRepository.findByCouponIdOrderByUsedAtDesc(couponId).stream()
+        List<com.pmrgsolution.features.coupon.entity.CouponUsage> usages =
+                couponUsageRepository.findByCouponIdOrderByUsedAtDesc(couponId);
+
+        // PERF FIX: Batch-load all order numbers in a single query instead of N separate queries.
+        // Previously each usage triggered a separate orderRepository.findById() call.
+        Set<UUID> orderIds = usages.stream()
+                .filter(u -> u.getOrderId() != null)
+                .map(com.pmrgsolution.features.coupon.entity.CouponUsage::getOrderId)
+                .collect(Collectors.toSet());
+
+        Map<UUID, String> orderNumberMap = orderIds.isEmpty()
+                ? java.util.Collections.emptyMap()
+                : orderRepository.findAllById(orderIds).stream()
+                    .collect(Collectors.toMap(
+                            com.pmrgsolution.features.order.entity.Order::getId,
+                            com.pmrgsolution.features.order.entity.Order::getOrderNumber));
+
+        return usages.stream()
                 .map(u -> {
-                    String orderNum = null;
-                    if (u.getOrderId() != null) {
-                        orderNum = orderRepository.findById(u.getOrderId())
-                                .map(com.pmrgsolution.features.order.entity.Order::getOrderNumber)
-                                .orElse(null);
-                    }
+                    String orderNum = u.getOrderId() != null ? orderNumberMap.get(u.getOrderId()) : null;
                     return CouponUsageResponse.builder()
                             .id(u.getId())
                             .userId(u.getUser() != null ? u.getUser().getId() : null)

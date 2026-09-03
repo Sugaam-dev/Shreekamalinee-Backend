@@ -34,7 +34,7 @@ public class Order {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(name = "order_number", length = 50)
+    @Column(name = "order_number", length = 50, unique = true)
     private String orderNumber;
 
     @ManyToOne(fetch = FetchType.LAZY)

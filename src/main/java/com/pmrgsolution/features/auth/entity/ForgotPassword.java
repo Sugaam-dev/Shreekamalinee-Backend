@@ -35,7 +35,7 @@ public class ForgotPassword {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @Column(name = "otp", nullable = false)
+    @Column(name = "otp", length = 64, nullable = false)
     private String otp;
 
     @Builder.Default

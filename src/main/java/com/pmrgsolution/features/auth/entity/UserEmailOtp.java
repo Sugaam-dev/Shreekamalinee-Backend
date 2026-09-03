@@ -33,7 +33,7 @@ public class UserEmailOtp {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @Column(name = "email_otp", length = 10, nullable = false)
+    @Column(name = "email_otp", length = 64, nullable = false)
     private String emailOtp;
 
     @Column(name = "expires_at", nullable = false)

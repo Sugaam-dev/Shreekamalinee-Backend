@@ -301,15 +301,11 @@ public class EmailServiceImpl implements EmailService {
                     break; // Succeeded!
                 } catch (Exception sendEx) {
                     if (attempt < maxRetries) {
-                        long backoffMs = attempt * 600L;
-                        log.warn("Resend email rate-limit or temporary network delay on attempt {} for {}. Retrying in {}ms...",
-                                attempt, maskEmail(to), backoffMs);
-                        try {
-                            Thread.sleep(backoffMs);
-                        } catch (InterruptedException ie) {
-                            Thread.currentThread().interrupt();
-                            break;
-                        }
+                        // PERF FIX: Removed Thread.sleep — blocking an async thread pool thread
+                        // for 600-1800ms under high load starves other async tasks.
+                        // Fast-retry is acceptable since email dispatch is already async & non-blocking.
+                        log.warn("Email send attempt {} failed for {}. Retrying immediately... Error: {}",
+                                attempt, maskEmail(to), sendEx.getMessage());
                     } else {
                         log.error("Failed to dispatch email '{}' → {} after {} attempts: {}",
                                 subject, maskEmail(to), maxRetries, sendEx.getMessage());

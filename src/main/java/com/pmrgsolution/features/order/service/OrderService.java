@@ -13,7 +13,7 @@ import java.util.UUID;
 
 public interface OrderService {
     OrderResponse createOrder(UUID userId, CheckoutRequest request, String idempotencyKey);
-    List<OrderResponse> getUserOrders(UUID userId);
+    Page<OrderResponse> getUserOrders(UUID userId, Pageable pageable);
     OrderResponse getOrderById(UUID userId, UUID orderId);
     OrderResponse getOrderByIdAdmin(UUID orderId);
     OrderResponse getOrderByOrderNumber(String orderNumber);
