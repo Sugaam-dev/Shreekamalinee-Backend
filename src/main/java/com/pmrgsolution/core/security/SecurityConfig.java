@@ -88,7 +88,6 @@ public class SecurityConfig {
                         "/actuator/health", "/actuator/info",
                         "/v3/api-docs/**", "/swagger-ui/**",
                         "/api/v1/orders/razorpay/webhook",
-                        "/api/v1/orders/bank-details",      // Public: needed for checkout UPI display
                         "/api/v1/settings/public",
                         "/api/v1/contact",
                         // SECURITY FIX: Only coupon VALIDATE is public (for checkout preview without login)

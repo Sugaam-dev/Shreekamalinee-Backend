@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -22,35 +23,28 @@ public class StoreSettingsServiceImpl implements StoreSettingsService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "public_store_settings", key = "'active'")
+    public StoreSettingsResponse getPublicStoreSettings() {
+        return storeSettingsRepository.findFirstByOrderByCreatedAtDesc()
+                .map(this::mapToPublicResponse)
+                .orElseGet(() -> mapToPublicResponse(createDefaultSettingsEntity()));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     @Cacheable(value = "bank_details", key = "'active'")
     public StoreSettingsResponse getStoreSettings() {
         return storeSettingsRepository.findFirstByOrderByCreatedAtDesc()
                 .map(this::mapToResponse)
-                .orElseGet(() -> StoreSettingsResponse.builder()
-                        .accountHolderName("Shreekamalinee Luxury Sarees")
-                        .accountNumber("")
-                        .ifscCode("")
-                        .bankName("")
-                        .branchName("")
-                        .upiId("")
-                        .qrCodeUrl("")
-                        .whatsappNumber("+919876543210")
-                        .supportEmail("care@shreekamalinee.com")
-                        .freeShippingThreshold(java.math.BigDecimal.valueOf(1499.00))
-                        .standardShippingFee(java.math.BigDecimal.valueOf(99.00))
-                        .codHandlingFee(java.math.BigDecimal.valueOf(99.00))
-                        .freeCodThreshold(java.math.BigDecimal.valueOf(2999.00))
-                        .isFreeShippingPromoActive(false)
-                        .isAnnouncementActive(true)
-                        .announcementText("✨ Festive Handloom Edit Live — Free Express Shipping on Orders Above ₹1,499 ✨")
-                        .announcementLink("/shop")
-                        .isActive(true)
-                        .build());
+                .orElseGet(() -> mapToResponse(createDefaultSettingsEntity()));
     }
 
     @Override
     @Transactional
-    @CacheEvict(value = "bank_details", allEntries = true)
+    @Caching(evict = {
+        @CacheEvict(value = "bank_details", allEntries = true),
+        @CacheEvict(value = "public_store_settings", allEntries = true)
+    })
     public ShippingSettingsResponse updateShippingSettings(ShippingSettingsRequest request) {
         StoreSettings entity = storeSettingsRepository.findFirstByOrderByCreatedAtDesc()
                 .orElseGet(() -> StoreSettings.builder().build());
@@ -85,7 +79,10 @@ public class StoreSettingsServiceImpl implements StoreSettingsService {
 
     @Override
     @Transactional
-    @CacheEvict(value = "bank_details", allEntries = true)
+    @Caching(evict = {
+        @CacheEvict(value = "bank_details", allEntries = true),
+        @CacheEvict(value = "public_store_settings", allEntries = true)
+    })
     public AnnouncementSettingsResponse updateAnnouncementSettings(AnnouncementSettingsRequest request) {
         StoreSettings entity = storeSettingsRepository.findFirstByOrderByCreatedAtDesc()
                 .orElseGet(() -> StoreSettings.builder().build());
@@ -106,7 +103,10 @@ public class StoreSettingsServiceImpl implements StoreSettingsService {
 
     @Override
     @Transactional
-    @CacheEvict(value = "bank_details", allEntries = true)
+    @Caching(evict = {
+        @CacheEvict(value = "bank_details", allEntries = true),
+        @CacheEvict(value = "public_store_settings", allEntries = true)
+    })
     public ContactSettingsResponse updateContactSettings(ContactSettingsRequest request) {
         StoreSettings entity = storeSettingsRepository.findFirstByOrderByCreatedAtDesc()
                 .orElseGet(() -> StoreSettings.builder().build());
@@ -127,7 +127,10 @@ public class StoreSettingsServiceImpl implements StoreSettingsService {
 
     @Override
     @Transactional
-    @CacheEvict(value = "bank_details", allEntries = true)
+    @Caching(evict = {
+        @CacheEvict(value = "bank_details", allEntries = true),
+        @CacheEvict(value = "public_store_settings", allEntries = true)
+    })
     public StoreSettingsResponse updateBankingSettings(BankingSettingsRequest request) {
         StoreSettings entity = storeSettingsRepository.findFirstByOrderByCreatedAtDesc()
                 .orElseGet(() -> StoreSettings.builder().build());
@@ -156,7 +159,10 @@ public class StoreSettingsServiceImpl implements StoreSettingsService {
 
     @Override
     @Transactional
-    @CacheEvict(value = "bank_details", allEntries = true)
+    @Caching(evict = {
+        @CacheEvict(value = "bank_details", allEntries = true),
+        @CacheEvict(value = "public_store_settings", allEntries = true)
+    })
     public StoreSettingsResponse uploadQrCode(MultipartFile file) {
         StoreSettings entity = storeSettingsRepository.findFirstByOrderByCreatedAtDesc()
                 .orElseGet(() -> StoreSettings.builder().build());
@@ -177,6 +183,79 @@ public class StoreSettingsServiceImpl implements StoreSettingsService {
         return mapToResponse(saved);
     }
 
+    private StoreSettings createDefaultSettingsEntity() {
+        return StoreSettings.builder()
+                .accountHolderName("Shreekamalinee Luxury Sarees")
+                .accountNumber("")
+                .ifscCode("")
+                .bankName("")
+                .branchName("")
+                .upiId("")
+                .qrCodeUrl("")
+                .whatsappNumber("+919876543210")
+                .supportEmail("care@shreekamalinee.com")
+                .freeShippingThreshold(java.math.BigDecimal.valueOf(1499.00))
+                .standardShippingFee(java.math.BigDecimal.valueOf(99.00))
+                .codHandlingFee(java.math.BigDecimal.valueOf(99.00))
+                .freeCodThreshold(java.math.BigDecimal.valueOf(2999.00))
+                .isFreeShippingPromoActive(false)
+                .isAnnouncementActive(true)
+                .announcementText("✨ Festive Handloom Edit Live — Free Express Shipping on Orders Above ₹1,499 ✨")
+                .announcementLink("/shop")
+                .contactAddress("Shreekamalinee Studio, Atelier Heritage Lane, Varanasi, Uttar Pradesh 221001, India")
+                .operatingHours("Monday to Saturday: 10:00 AM – 7:00 PM IST")
+                .isActive(true)
+                .build();
+    }
+
+    /**
+     * Sanitized public response: OMIT all sensitive banking credentials.
+     */
+    private StoreSettingsResponse mapToPublicResponse(StoreSettings entity) {
+        return StoreSettingsResponse.builder()
+                .id(entity.getId())
+                // Omit banking details from public payload
+                .accountHolderName(null)
+                .accountNumber(null)
+                .ifscCode(null)
+                .bankName(null)
+                .branchName(null)
+                .upiId(null)
+                .qrCodeUrl(null)
+                // Public customer-facing channels & policies
+                .whatsappNumber(entity.getWhatsappNumber())
+                .supportEmail(entity.getSupportEmail())
+                .contactAddress(entity.getContactAddress())
+                .operatingHours(entity.getOperatingHours())
+                .contactPhone(entity.getWhatsappNumber())
+                .contactEmail(entity.getSupportEmail())
+                .freeShippingThreshold(entity.getFreeShippingThreshold())
+                .standardShippingFee(entity.getStandardShippingFee())
+                .codHandlingFee(entity.getCodHandlingFee())
+                .freeCodThreshold(entity.getFreeCodThreshold())
+                .isFreeShippingPromoActive(entity.getIsFreeShippingPromoActive())
+                .isAnnouncementActive(entity.getIsAnnouncementActive())
+                .announcementText(entity.getAnnouncementText())
+                .announcementsJson(entity.getAnnouncementsJson())
+                .announcementLink(entity.getAnnouncementLink())
+                .isUpiPaymentActive(entity.getIsUpiPaymentActive() != null ? entity.getIsUpiPaymentActive() : true)
+                .isRazorpayPaymentActive(false)
+                .isRazorpayImplemented(false)
+                .isCodPaymentActive(entity.getIsCodPaymentActive() != null ? entity.getIsCodPaymentActive() : true)
+                .isWhatsappOrderActive(entity.getIsWhatsappOrderActive() != null ? entity.getIsWhatsappOrderActive() : true)
+                .estimatedDeliveryDaysMin(entity.getEstimatedDeliveryDaysMin() != null ? entity.getEstimatedDeliveryDaysMin() : 3)
+                .estimatedDeliveryDaysMax(entity.getEstimatedDeliveryDaysMax() != null ? entity.getEstimatedDeliveryDaysMax() : 5)
+                .returnWindowDays(entity.getReturnWindowDays() != null ? entity.getReturnWindowDays() : 7)
+                .isReturnActive(entity.getIsReturnActive() != null ? entity.getIsReturnActive() : true)
+                .returnPolicyText(entity.getReturnPolicyText())
+                .deliveryPolicyNotice(entity.getDeliveryPolicyNotice())
+                .isActive(entity.getIsActive())
+                .build();
+    }
+
+    /**
+     * Admin full response: includes all banking and store parameters.
+     */
     private StoreSettingsResponse mapToResponse(StoreSettings entity) {
         return StoreSettingsResponse.builder()
                 .id(entity.getId())

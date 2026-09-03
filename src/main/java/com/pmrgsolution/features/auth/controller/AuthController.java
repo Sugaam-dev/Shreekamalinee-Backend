@@ -29,7 +29,10 @@ public class AuthController {
     private final AuthService authService;
     private final com.pmrgsolution.features.auth.service.EmailUsageService emailUsageService;
 
-    @org.springframework.beans.factory.annotation.Value("${shreekamalinee.jwt.refreshExpirationMs:7776000000}")
+    @org.springframework.beans.factory.annotation.Value("${shreekamalinee.jwt.expirationMs:900000}")
+    private long jwtExpirationMs;
+
+    @org.springframework.beans.factory.annotation.Value("${shreekamalinee.jwt.refreshExpirationMs:604800000}")
     private long refreshExpirationMs;
 
     @org.springframework.beans.factory.annotation.Value("${shreekamalinee.cookie.secure:false}")
@@ -134,7 +137,7 @@ public class AuthController {
 
         ResponseCookie accessCookie = ResponseCookie.from("shreekamalinee-jwt", response.getAccessToken())
                 .path("/")
-                .maxAge(15 * 60) // 15 Minutes
+                .maxAge(jwtExpirationMs / 1000) // Configurable from .env JWT_EXPIRATION
                 .httpOnly(true)
                 .secure(cookieSecure)
                 .sameSite(cookieSameSite)
@@ -194,7 +197,7 @@ public class AuthController {
 
         ResponseCookie accessCookie = ResponseCookie.from("shreekamalinee-jwt", jwt != null ? jwt : "")
                 .path("/")
-                .maxAge(15 * 60) // 15 Minutes for Access Token
+                .maxAge(jwtExpirationMs / 1000) // Configurable from .env JWT_EXPIRATION
                 .httpOnly(true)
                 .secure(cookieSecure)
                 .sameSite(cookieSameSite)

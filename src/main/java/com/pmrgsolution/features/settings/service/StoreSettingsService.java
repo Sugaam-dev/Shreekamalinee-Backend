@@ -4,6 +4,7 @@ import com.pmrgsolution.features.settings.dto.*;
 import org.springframework.web.multipart.MultipartFile;
 
 public interface StoreSettingsService {
+    StoreSettingsResponse getPublicStoreSettings();
     StoreSettingsResponse getStoreSettings();
     ShippingSettingsResponse updateShippingSettings(ShippingSettingsRequest request);
     AnnouncementSettingsResponse updateAnnouncementSettings(AnnouncementSettingsRequest request);

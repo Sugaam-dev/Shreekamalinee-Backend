@@ -392,9 +392,9 @@ public class OrderServiceImpl implements OrderService {
                     return userRepository.save(newUser);
                 });
 
-        // 2. Create Shipping Address (Order-specific; not saved to user's profile address book)
+        // 2. Create Shipping Address (Linked to user)
         ShippingAddress address = ShippingAddress.builder()
-                .user(null)
+                .user(user)
                 .fullName(cleanName)
                 .phoneNumber(cleanPhone)
                 .addressLine1(request.getAddressLine1())
@@ -440,7 +440,31 @@ public class OrderServiceImpl implements OrderService {
             }
         }
 
-        BigDecimal finalAmount = subtotal.subtract(discountAmount);
+        // Dynamic Shipping & COD Fee Calculation from Store Settings
+        StoreSettingsResponse settings = storeSettingsService.getStoreSettings();
+        BigDecimal shippingFee = BigDecimal.ZERO;
+        BigDecimal freeShippingThreshold = settings.getFreeShippingThreshold() != null ? settings.getFreeShippingThreshold() : BigDecimal.valueOf(1499.00);
+        BigDecimal baseShippingFee = settings.getStandardShippingFee() != null ? settings.getStandardShippingFee() : BigDecimal.valueOf(99.00);
+
+        if (Boolean.TRUE.equals(settings.getIsFreeShippingPromoActive()) || subtotal.compareTo(freeShippingThreshold) >= 0) {
+            shippingFee = BigDecimal.ZERO;
+        } else {
+            shippingFee = baseShippingFee;
+        }
+
+        String payMethod = request.getPaymentMethod() != null ? request.getPaymentMethod().toUpperCase() : "WHATSAPP_UPI";
+        BigDecimal codHandlingFee = BigDecimal.ZERO;
+        if ("COD".equalsIgnoreCase(payMethod)) {
+            BigDecimal baseCodFee = settings.getCodHandlingFee() != null ? settings.getCodHandlingFee() : BigDecimal.valueOf(99.00);
+            BigDecimal freeCodThreshold = settings.getFreeCodThreshold() != null ? settings.getFreeCodThreshold() : BigDecimal.valueOf(2999.00);
+            if (subtotal.compareTo(freeCodThreshold) >= 0) {
+                codHandlingFee = BigDecimal.ZERO;
+            } else {
+                codHandlingFee = baseCodFee;
+            }
+        }
+
+        BigDecimal finalAmount = subtotal.subtract(discountAmount).add(shippingFee).add(codHandlingFee);
         if (finalAmount.compareTo(BigDecimal.ZERO) < 0) finalAmount = BigDecimal.ZERO;
 
         String datePart = java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd"));
@@ -451,7 +475,6 @@ public class OrderServiceImpl implements OrderService {
         } while (orderRepository.findByOrderNumber(orderNumber).isPresent());
 
         String payStatus = "PAID".equalsIgnoreCase(request.getPaymentStatus()) ? "PAID" : "PENDING";
-        String payMethod = request.getPaymentMethod() != null ? request.getPaymentMethod().toUpperCase() : "WHATSAPP_UPI";
         String orderStatus = "PAID".equals(payStatus) ? "PROCESSING" : "PLACED";
 
         Order order = Order.builder()
@@ -460,8 +483,8 @@ public class OrderServiceImpl implements OrderService {
                 .shippingAddress(address)
                 .totalAmount(subtotal)
                 .discountAmount(discountAmount)
-                .shippingFee(BigDecimal.ZERO)
-                .codHandlingFee(BigDecimal.ZERO)
+                .shippingFee(shippingFee)
+                .codHandlingFee(codHandlingFee)
                 .finalAmount(finalAmount)
                 .paymentMethod(payMethod)
                 .paymentStatus(payStatus)

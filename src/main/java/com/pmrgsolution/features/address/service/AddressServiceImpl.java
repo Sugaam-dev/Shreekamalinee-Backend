@@ -59,6 +59,7 @@ public class AddressServiceImpl implements AddressService {
     @Transactional(readOnly = true)
     public List<AddressResponse> getAddresses(UUID userId) {
         return addressRepository.findByUserId(userId).stream()
+                .filter(a -> !"MANUAL_ORDER".equalsIgnoreCase(a.getAddressType()))
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }

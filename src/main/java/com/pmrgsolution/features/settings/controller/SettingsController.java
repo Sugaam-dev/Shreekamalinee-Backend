@@ -17,6 +17,6 @@ public class SettingsController {
 
     @GetMapping("/public")
     public ResponseEntity<StoreSettingsResponse> getPublicStoreSettings() {
-        return ResponseEntity.ok(storeSettingsService.getStoreSettings());
+        return ResponseEntity.ok(storeSettingsService.getPublicStoreSettings());
     }
 }
