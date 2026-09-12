@@ -1,5 +1,6 @@
 package com.pmrgsolution.features.catalog.dto;
 
+import com.pmrgsolution.constant.GenderCategory;
 import lombok.*;
 import java.math.BigDecimal;
 import java.util.List;
@@ -17,7 +18,7 @@ public class ProductResponse {
     private BigDecimal originalPrice;
     private BigDecimal offerPrice;
     private String sku;
-    private String genderCategory;
+    private GenderCategory genderCategory;
     private String season;
     private String artisanalStory;
     private String fabricCare;

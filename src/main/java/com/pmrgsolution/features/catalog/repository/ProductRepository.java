@@ -21,6 +21,7 @@ public interface ProductRepository extends JpaRepository<Product, UUID>, JpaSpec
     boolean existsBySku(String sku);
     boolean existsBySkuAndIdNot(String sku, UUID id);
     Page<Product> findByCategoryId(UUID categoryId, Pageable pageable);
+    long countByCategoryId(UUID categoryId);
     
     @Query("SELECT COUNT(DISTINCT p) FROM Product p JOIN p.variants v WHERE v.stockQuantity < :threshold")
     long countLowStock(@Param("threshold") int threshold);

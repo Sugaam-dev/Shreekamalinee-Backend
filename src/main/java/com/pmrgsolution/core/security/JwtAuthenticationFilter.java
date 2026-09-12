@@ -140,7 +140,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         Cookie[] cookies = request.getCookies();
         if (cookies != null) {
             for (Cookie cookie : cookies) {
-                if ("shreekamalinee-jwt".equals(cookie.getName()) || "renaissance-jwt".equals(cookie.getName())) {
+                if ("shreekamalinee-jwt".equals(cookie.getName())) {
                     return cookie.getValue();
                 }
             }

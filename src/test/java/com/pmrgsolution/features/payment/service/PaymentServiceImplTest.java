@@ -1,7 +1,10 @@
 package com.pmrgsolution.features.payment.service;
 
-import com.pmrgsolution.Exception.BusinessException;
-import com.pmrgsolution.Exception.ResourceNotFoundException;
+import com.pmrgsolution.constant.OrderStatus;
+import com.pmrgsolution.constant.PaymentMethod;
+import com.pmrgsolution.constant.PaymentStatus;
+import com.pmrgsolution.exception.BusinessException;
+import com.pmrgsolution.exception.ResourceNotFoundException;
 import com.pmrgsolution.core.service.FileStorageService;
 import com.pmrgsolution.features.auth.service.EmailService;
 import com.pmrgsolution.features.order.entity.Order;
@@ -42,6 +45,7 @@ class PaymentServiceImplTest {
     @Mock private com.pmrgsolution.features.coupon.repository.CouponRepository couponRepository;
     @Mock private com.pmrgsolution.features.coupon.repository.CouponUsageRepository couponUsageRepository;
     @Mock private com.pmrgsolution.features.order.service.OrderService orderService;
+    @Mock private com.pmrgsolution.core.service.RealtimeEventService realtimeEventService;
 
     @InjectMocks private PaymentServiceImpl paymentService;
 
@@ -61,9 +65,9 @@ class PaymentServiceImplTest {
         order = new Order();
         order.setId(orderId);
         order.setFinalAmount(BigDecimal.valueOf(1500));
-        order.setPaymentMethod("RAZORPAY");
-        order.setPaymentStatus("PENDING");
-        order.setStatus("PENDING");
+        order.setPaymentMethod(PaymentMethod.RAZORPAY);
+        order.setPaymentStatus(PaymentStatus.PENDING);
+        order.setStatus(OrderStatus.PLACED);
     }
 
     private String generateSignature(String orderId, String paymentId, String secret) {
@@ -135,8 +139,8 @@ class PaymentServiceImplTest {
 
         paymentService.verifyRazorpayPayment(req, userId);
 
-        assertThat(order.getPaymentStatus()).isEqualTo("PAID");
-        assertThat(order.getStatus()).isEqualTo("CONFIRMED");
+        assertThat(order.getPaymentStatus()).isEqualTo(PaymentStatus.PAID);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
         verify(orderRepository).save(order);
         verify(transactionRepository).save(any(Transaction.class));
     }

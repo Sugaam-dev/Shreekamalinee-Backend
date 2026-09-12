@@ -1,7 +1,7 @@
 package com.pmrgsolution.features.catalog.service;
 
-import com.pmrgsolution.Exception.BusinessException;
-import com.pmrgsolution.Exception.ResourceNotFoundException;
+import com.pmrgsolution.exception.BusinessException;
+import com.pmrgsolution.exception.ResourceNotFoundException;
 import com.pmrgsolution.features.auth.entity.User;
 import com.pmrgsolution.features.auth.repository.UserRepository;
 import com.pmrgsolution.features.catalog.dto.ProductReviewsSummaryDTO;
@@ -15,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,7 +24,6 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -33,10 +33,14 @@ public class ReviewServiceImpl implements ReviewService {
     private final ReviewRepository reviewRepository;
     private final ProductRepository productRepository;
     private final UserRepository userRepository;
+    private final com.pmrgsolution.core.service.RealtimeEventService realtimeEventService;
 
     @Override
     @Transactional
-    @CacheEvict(value = "reviews", key = "#productId")
+    @Caching(evict = {
+        @CacheEvict(value = "reviews", key = "#productId"),
+        @CacheEvict(value = {"products", "catalog"}, allEntries = true)
+    })
     public ReviewResponse addOrUpdateReview(UUID productId, UUID userId, ReviewRequest request) {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
@@ -56,12 +60,17 @@ public class ReviewServiceImpl implements ReviewService {
 
         Review saved = reviewRepository.save(review);
         log.info("Review saved for product '{}' by user '{}' with rating {}", productId, user.getEmail(), request.getRating());
+        realtimeEventService.broadcast("REVIEW_UPDATED", "{\"type\":\"REVIEW_UPDATED\",\"productId\":\"" + productId + "\"}");
+        realtimeEventService.broadcast("PRODUCT_UPDATED", "{\"type\":\"PRODUCT_UPDATED\",\"productId\":\"" + productId + "\"}");
         return mapToResponse(saved);
     }
 
     @Override
     @Transactional
-    @CacheEvict(value = "reviews", key = "#productId")
+    @Caching(evict = {
+        @CacheEvict(value = "reviews", key = "#productId"),
+        @CacheEvict(value = {"products", "catalog"}, allEntries = true)
+    })
     public ReviewResponse addAdminReview(UUID productId, ReviewRequest request) {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
@@ -81,6 +90,8 @@ public class ReviewServiceImpl implements ReviewService {
 
         Review saved = reviewRepository.save(review);
         log.info("Admin added verified testimonial review for product '{}' by '{}'", productId, reviewerName);
+        realtimeEventService.broadcast("REVIEW_UPDATED", "{\"type\":\"REVIEW_UPDATED\",\"productId\":\"" + productId + "\"}");
+        realtimeEventService.broadcast("PRODUCT_UPDATED", "{\"type\":\"PRODUCT_UPDATED\",\"productId\":\"" + productId + "\"}");
         return mapToResponse(saved);
     }
 
@@ -100,7 +111,7 @@ public class ReviewServiceImpl implements ReviewService {
 
         List<ReviewResponse> mappedList = reviews.stream()
                 .map(this::mapToResponse)
-                .collect(Collectors.toList());
+                .toList();
 
         return ProductReviewsSummaryDTO.builder()
                 .productId(productId)
@@ -112,7 +123,10 @@ public class ReviewServiceImpl implements ReviewService {
 
     @Override
     @Transactional
-    @CacheEvict(value = "reviews", allEntries = true)
+    @Caching(evict = {
+        @CacheEvict(value = "reviews", allEntries = true),
+        @CacheEvict(value = {"products", "catalog"}, allEntries = true)
+    })
     public void deleteReview(UUID reviewId, UUID userId, boolean isAdmin) {
         Review review = reviewRepository.findById(reviewId)
                 .orElseThrow(() -> new ResourceNotFoundException("Review not found"));
@@ -121,8 +135,13 @@ public class ReviewServiceImpl implements ReviewService {
             throw new BusinessException("You are not authorized to delete this review", HttpStatus.FORBIDDEN);
         }
 
+        UUID productId = review.getProduct() != null ? review.getProduct().getId() : null;
         reviewRepository.delete(review);
         log.info("Review '{}' deleted by user '{}' (isAdmin: {})", reviewId, userId, isAdmin);
+        if (productId != null) {
+            realtimeEventService.broadcast("REVIEW_UPDATED", "{\"type\":\"REVIEW_UPDATED\",\"productId\":\"" + productId + "\"}");
+            realtimeEventService.broadcast("PRODUCT_UPDATED", "{\"type\":\"PRODUCT_UPDATED\",\"productId\":\"" + productId + "\"}");
+        }
     }
 
     private ReviewResponse mapToResponse(Review review) {

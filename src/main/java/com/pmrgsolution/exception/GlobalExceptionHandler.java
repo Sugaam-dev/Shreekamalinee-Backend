@@ -1,4 +1,4 @@
-package com.pmrgsolution.Exception;
+package com.pmrgsolution.exception;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -155,8 +155,28 @@ public class GlobalExceptionHandler {
     // 10. Generic Fallback (Internal Server Errors)
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGlobal(Exception ex, HttpServletRequest request) {
+        if (isClientAbort(ex)) {
+            log.debug("Client connection closed/aborted at {}: {}", request != null ? request.getRequestURI() : "", ex.getMessage());
+            return null;
+        }
         log.error("Unexpected error at {}: ", request.getRequestURI(), ex);
         return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Server Error", "An unexpected error occurred", request, null);
+    }
+
+    private boolean isClientAbort(Throwable ex) {
+        if (ex == null) return false;
+        String name = ex.getClass().getName();
+        String msg = ex.getMessage() != null ? ex.getMessage().toLowerCase() : "";
+        if (name.contains("ClientAbortException") || name.contains("AsyncRequestNotUsableException")
+                || name.contains("AsyncRequestTimeoutException") || name.contains("HttpMessageNotWritableException")) {
+            return true;
+        }
+        if (msg.contains("cannot start async") || msg.contains("broken pipe") || msg.contains("connection reset")
+                || msg.contains("connection was aborted") || msg.contains("response has already been committed")
+                || msg.contains("text/event-stream")) {
+            return true;
+        }
+        return isClientAbort(ex.getCause());
     }
     
  // 11. Handle Wrong HTTP Method (e.g., POST instead of GET)
@@ -199,27 +219,48 @@ public class GlobalExceptionHandler {
     }
 
     private ResponseEntity<ErrorResponse> buildResponse(HttpStatus status, String error, String message, HttpServletRequest request, Map<String, String> vErrors) {
+        if (request != null) {
+            String accept = request.getHeader("Accept");
+            String uri = request.getRequestURI();
+            if ((accept != null && accept.contains("text/event-stream")) || (uri != null && uri.contains("/realtime/stream"))) {
+                return ResponseEntity.status(status).contentType(org.springframework.http.MediaType.APPLICATION_JSON).body(
+                        ErrorResponse.builder()
+                                .status(status.value())
+                                .error(error)
+                                .message(message)
+                                .timestamp(LocalDateTime.now())
+                                .path(request.getRequestURI())
+                                .validationErrors(vErrors)
+                                .build()
+                );
+            }
+        }
         return new ResponseEntity<>(ErrorResponse.builder()
                 .status(status.value())
                 .error(error)
                 .message(message)
                 .timestamp(LocalDateTime.now())
-                .path(request.getRequestURI())
+                .path(request != null ? request.getRequestURI() : "")
                 .validationErrors(vErrors)
                 .build(), status);
     }
+
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException ex, HttpServletRequest request) {
         return buildResponse(HttpStatus.BAD_REQUEST, "Invalid Input", ex.getMessage(), request, null);
     }
- // Add to GlobalExceptionHandler.java
+
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<ErrorResponse> handleIllegalState(IllegalStateException ex, HttpServletRequest request) {
+        if (isClientAbort(ex) || (ex.getMessage() != null && ex.getMessage().contains("Cannot start async"))) {
+            log.debug("Async/SSE state exception at {}: {}", request != null ? request.getRequestURI() : "", ex.getMessage());
+            return null;
+        }
         log.warn("Illegal state: {}", ex.getMessage());
         return buildResponse(HttpStatus.BAD_REQUEST, "Invalid Operation", ex.getMessage(), request, null);
     }
  
- // 14. Handle Logout/Auth missing exceptions without a full stack trace
+    // 14. Handle Logout/Auth missing exceptions without a full stack trace
     @ExceptionHandler(AuthenticationCredentialsNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleAuthNotFound(
             AuthenticationCredentialsNotFoundException ex, 
@@ -236,5 +277,15 @@ public class GlobalExceptionHandler {
             null
         );
     }
-    
+
+    // 15. Handle Client Disconnects & Broken Pipes on Streaming/SSE endpoints gracefully
+    @ExceptionHandler({
+            java.io.IOException.class,
+            org.springframework.web.context.request.async.AsyncRequestNotUsableException.class,
+            org.springframework.web.context.request.async.AsyncRequestTimeoutException.class,
+            org.springframework.http.converter.HttpMessageNotWritableException.class
+    })
+    public void handleAsyncDisconnect(Exception ex, HttpServletRequest request) {
+        log.debug("Async/SSE client connection ended at {}: {}", request != null ? request.getRequestURI() : "", ex.getMessage());
+    }
 }

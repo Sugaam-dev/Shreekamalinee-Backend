@@ -4,6 +4,7 @@ import com.pmrgsolution.features.coupon.dto.CouponRequest;
 import com.pmrgsolution.features.coupon.dto.CouponResponse;
 import com.pmrgsolution.features.coupon.dto.CouponUsageResponse;
 import com.pmrgsolution.features.coupon.service.CouponService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -22,7 +23,7 @@ public class AdminCouponController {
     private final CouponService couponService;
 
     @PostMapping
-    public ResponseEntity<String> createCoupon(@RequestBody CouponRequest request) {
+    public ResponseEntity<String> createCoupon(@Valid @RequestBody CouponRequest request) {
         couponService.createCoupon(request);
         return ResponseEntity.status(HttpStatus.CREATED).body("Coupon created successfully");
     }

@@ -1,20 +1,23 @@
 package com.pmrgsolution.core.security;
 
-import jakarta.servlet.*;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import org.springframework.web.filter.OncePerRequestFilter;
+
 import java.io.IOException;
 
 @Slf4j
 @Component
-public class RequestLoggingFilter implements Filter {
+public class RequestLoggingFilter extends OncePerRequestFilter {
 
     @Override
-    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
-            throws IOException, ServletException {
+    protected void doFilterInternal(HttpServletRequest httpRequest, HttpServletResponse httpResponse, FilterChain filterChain)
+            throws ServletException, IOException {
         
-        HttpServletRequest httpRequest = (HttpServletRequest) request;
         String uri = httpRequest.getRequestURI();
         String method = httpRequest.getMethod();
         
@@ -27,6 +30,6 @@ public class RequestLoggingFilter implements Filter {
         
         log.info("HTTP Request: {} {}{}", method, uri, maskedQuery.isEmpty() ? "" : "?" + maskedQuery);
         
-        chain.doFilter(request, response);
+        filterChain.doFilter(httpRequest, httpResponse);
     }
 }

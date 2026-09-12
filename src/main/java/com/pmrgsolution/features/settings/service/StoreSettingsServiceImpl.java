@@ -20,6 +20,7 @@ public class StoreSettingsServiceImpl implements StoreSettingsService {
 
     private final StoreSettingsRepository storeSettingsRepository;
     private final FileStorageService fileStorageService;
+    private final com.pmrgsolution.core.service.RealtimeEventService realtimeEventService;
 
     @Override
     @Transactional(readOnly = true)
@@ -37,6 +38,15 @@ public class StoreSettingsServiceImpl implements StoreSettingsService {
         return storeSettingsRepository.findFirstByOrderByCreatedAtDesc()
                 .map(this::mapToResponse)
                 .orElseGet(() -> mapToResponse(createDefaultSettingsEntity()));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @Cacheable(value = "bank_details", key = "'public_banking'")
+    public BankDetailsResponse getBankDetails() {
+        return storeSettingsRepository.findFirstByOrderByCreatedAtDesc()
+                .map(this::mapToBankDetailsResponse)
+                .orElseGet(() -> mapToBankDetailsResponse(createDefaultSettingsEntity()));
     }
 
     @Override
@@ -62,6 +72,7 @@ public class StoreSettingsServiceImpl implements StoreSettingsService {
         if (request.getDeliveryPolicyNotice() != null) entity.setDeliveryPolicyNotice(request.getDeliveryPolicyNotice().trim());
 
         StoreSettings saved = storeSettingsRepository.save(entity);
+        realtimeEventService.broadcast("SETTINGS_UPDATED", "{\"type\":\"SETTINGS_UPDATED\"}");
         return ShippingSettingsResponse.builder()
                 .freeShippingThreshold(saved.getFreeShippingThreshold())
                 .standardShippingFee(saved.getStandardShippingFee())
@@ -93,6 +104,7 @@ public class StoreSettingsServiceImpl implements StoreSettingsService {
         if (request.getAnnouncementsJson() != null) entity.setAnnouncementsJson(request.getAnnouncementsJson().trim());
 
         StoreSettings saved = storeSettingsRepository.save(entity);
+        realtimeEventService.broadcast("SETTINGS_UPDATED", "{\"type\":\"SETTINGS_UPDATED\"}");
         return AnnouncementSettingsResponse.builder()
                 .isAnnouncementActive(saved.getIsAnnouncementActive())
                 .announcementText(saved.getAnnouncementText())
@@ -117,6 +129,7 @@ public class StoreSettingsServiceImpl implements StoreSettingsService {
         if (request.getOperatingHours() != null) entity.setOperatingHours(request.getOperatingHours().trim());
 
         StoreSettings saved = storeSettingsRepository.save(entity);
+        realtimeEventService.broadcast("SETTINGS_UPDATED", "{\"type\":\"SETTINGS_UPDATED\"}");
         return ContactSettingsResponse.builder()
                 .whatsappNumber(saved.getWhatsappNumber())
                 .supportEmail(saved.getSupportEmail())
@@ -154,7 +167,9 @@ public class StoreSettingsServiceImpl implements StoreSettingsService {
         if (request.getDeliveryPolicyNotice() != null) entity.setDeliveryPolicyNotice(request.getDeliveryPolicyNotice().trim());
         if (request.getIsActive() != null) entity.setIsActive(request.getIsActive());
 
-        return mapToResponse(storeSettingsRepository.save(entity));
+        StoreSettings saved = storeSettingsRepository.save(entity);
+        realtimeEventService.broadcast("SETTINGS_UPDATED", "{\"type\":\"SETTINGS_UPDATED\"}");
+        return mapToResponse(saved);
     }
 
     @Override
@@ -171,6 +186,7 @@ public class StoreSettingsServiceImpl implements StoreSettingsService {
         String newQrUrl = fileStorageService.storeFile(file, "payments");
         entity.setQrCodeUrl(newQrUrl);
         StoreSettings saved = storeSettingsRepository.save(entity);
+        realtimeEventService.broadcast("SETTINGS_UPDATED", "{\"type\":\"SETTINGS_UPDATED\"}");
 
         if (oldQrUrl != null && !oldQrUrl.isBlank() && !oldQrUrl.equals(newQrUrl)) {
             try {
@@ -293,6 +309,19 @@ public class StoreSettingsServiceImpl implements StoreSettingsService {
                 .returnPolicyText(entity.getReturnPolicyText())
                 .deliveryPolicyNotice(entity.getDeliveryPolicyNotice())
                 .isActive(entity.getIsActive())
+                .build();
+    }
+
+    private BankDetailsResponse mapToBankDetailsResponse(StoreSettings entity) {
+        return BankDetailsResponse.builder()
+                .accountHolderName(entity.getAccountHolderName())
+                .accountNumber(entity.getAccountNumber())
+                .ifscCode(entity.getIfscCode())
+                .bankName(entity.getBankName())
+                .branchName(entity.getBranchName())
+                .upiId(entity.getUpiId())
+                .qrCodeUrl(entity.getQrCodeUrl())
+                .whatsappNumber(entity.getWhatsappNumber())
                 .build();
     }
 }

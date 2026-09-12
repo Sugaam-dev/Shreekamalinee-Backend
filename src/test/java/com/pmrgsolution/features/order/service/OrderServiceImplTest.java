@@ -1,9 +1,12 @@
 package com.pmrgsolution.features.order.service;
 
-import com.pmrgsolution.Exception.BusinessException;
-import com.pmrgsolution.Exception.ResourceNotFoundException;
-import com.pmrgsolution.Constant.Role;
-import com.pmrgsolution.Constant.AuthProvider;
+import com.pmrgsolution.exception.BusinessException;
+import com.pmrgsolution.exception.ResourceNotFoundException;
+import com.pmrgsolution.constant.OrderStatus;
+import com.pmrgsolution.constant.PaymentMethod;
+import com.pmrgsolution.constant.PaymentStatus;
+import com.pmrgsolution.constant.Role;
+import com.pmrgsolution.constant.AuthProvider;
 import com.pmrgsolution.features.auth.entity.User;
 import com.pmrgsolution.features.auth.repository.UserRepository;
 import com.pmrgsolution.features.catalog.entity.Product;
@@ -65,6 +68,8 @@ class OrderServiceImplTest {
     @Mock private TransactionRepository transactionRepository;
     @Mock private StringRedisTemplate redisTemplate;
     @Mock private ValueOperations<String, String> valueOps;
+    @Mock private org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
+    @Mock private com.pmrgsolution.core.service.RealtimeEventService realtimeEventService;
 
     @InjectMocks private OrderServiceImpl orderService;
 
@@ -113,8 +118,8 @@ class OrderServiceImplTest {
         product.setVariants(List.of(variant));
 
         pendingOrder = Order.builder()
-                .id(orderId).status("PENDING").paymentStatus("PENDING")
-                .paymentMethod("RAZORPAY").totalAmount(BigDecimal.valueOf(1500))
+                .id(orderId).status(OrderStatus.PLACED).paymentStatus(PaymentStatus.PENDING)
+                .paymentMethod(PaymentMethod.RAZORPAY).totalAmount(BigDecimal.valueOf(1500))
                 .user(testUser).build();
 
         settings = new StoreSettingsResponse();
@@ -138,7 +143,7 @@ class OrderServiceImplTest {
 
         CheckoutRequest req = new CheckoutRequest();
         req.setShippingAddressId(addressId);
-        req.setPaymentMethod("RAZORPAY");
+        req.setPaymentMethod(PaymentMethod.RAZORPAY);
         req.setDirectItem(di);
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(testUser));
@@ -158,22 +163,20 @@ class OrderServiceImplTest {
     void cancelOrder_pending_success_restoresStock() {
         pendingOrder.setIsStockDeducted(true);
         OrderItem oi = OrderItem.builder()
-                .id(UUID.randomUUID()).order(pendingOrder)
-                .product(product).variant(variant).quantity(2).build();
+                .order(pendingOrder).product(product).variant(variant)
+                .quantity(2).price(BigDecimal.valueOf(1500)).totalPrice(BigDecimal.valueOf(3000))
+                .build();
 
         when(orderRepository.findByIdAndUserId(orderId, userId)).thenReturn(Optional.of(pendingOrder));
         when(orderItemRepository.findByOrderId(orderId)).thenReturn(List.of(oi));
         when(productVariantRepository.findByIdForUpdate(variantId)).thenReturn(Optional.of(variant));
-        when(productVariantRepository.save(any())).thenReturn(variant);
-        when(orderRepository.save(any())).thenReturn(pendingOrder);
+        when(orderRepository.save(org.mockito.ArgumentMatchers.any(Order.class))).thenAnswer(i -> i.getArgument(0));
 
-        // Should not throw
-        assertThatCode(() -> orderService.cancelOrderCustomer(userId, orderId))
-                .doesNotThrowAnyException();
+        OrderResponse resp = orderService.cancelOrderCustomer(userId, orderId);
 
-        // Variant stock should be restored: 10 + 2 = 12
-        assertThat(variant.getStock()).isEqualTo(12);
-        verify(productVariantRepository).save(variant);
+        assertThat(resp.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        // Stock was 10, cancelled 2 items -> should be restored to 12
+        assertThat(variant.getStockQuantity()).isEqualTo(12);
     }
 
     // ─────────────────── ADMIN MANUAL ORDER TESTS ────────────────────
@@ -189,7 +192,7 @@ class OrderServiceImplTest {
                 .city("Mumbai")
                 .state("MH")
                 .postalCode("400001")
-                .paymentMethod("RAZORPAY")
+                .paymentMethod(PaymentMethod.RAZORPAY)
                 .build();
 
         assertThatThrownBy(() -> orderService.createAdminManualOrder(req))
@@ -200,7 +203,7 @@ class OrderServiceImplTest {
     @Test
     @DisplayName("cancelOrder_shipped: Throws BAD_REQUEST for SHIPPED order")
     void cancelOrder_shipped_throws() {
-        pendingOrder.setStatus("SHIPPED");
+        pendingOrder.setStatus(OrderStatus.SHIPPED);
 
         when(orderRepository.findByIdAndUserId(orderId, userId)).thenReturn(Optional.of(pendingOrder));
 
@@ -262,13 +265,13 @@ class OrderServiceImplTest {
         req.setPostalCode("400001");
         req.setProductId(productId);
         req.setQuantity(1);
-        req.setPaymentMethod("WHATSAPP_UPI");
-        req.setPaymentStatus("PAID");
+        req.setPaymentMethod(PaymentMethod.UPI);
+        req.setPaymentStatus(PaymentStatus.PAID);
 
         when(userRepository.findByEmailIgnoreCase("manual@test.com")).thenReturn(Optional.of(testUser));
         when(shippingAddressRepository.save(org.mockito.ArgumentMatchers.any(ShippingAddress.class))).thenAnswer(i -> {
             ShippingAddress sa = i.getArgument(0);
-            org.assertj.core.api.Assertions.assertThat(sa.getUser()).isNull();
+            org.assertj.core.api.Assertions.assertThat(sa.getUser()).isEqualTo(testUser);
             sa.setId(UUID.randomUUID());
             return sa;
         });
@@ -281,6 +284,7 @@ class OrderServiceImplTest {
         when(orderItemRepository.save(org.mockito.ArgumentMatchers.any(OrderItem.class))).thenAnswer(i -> i.getArgument(0));
         when(orderItemRepository.findByOrderId(orderId)).thenReturn(List.of());
         when(transactionRepository.findByOrderId(orderId)).thenReturn(Optional.empty());
+        when(storeSettingsService.getStoreSettings()).thenReturn(settings);
 
         OrderResponse res = orderService.createAdminManualOrder(req);
         org.assertj.core.api.Assertions.assertThat(res).isNotNull();

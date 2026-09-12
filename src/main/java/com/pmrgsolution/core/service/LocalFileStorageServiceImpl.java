@@ -1,6 +1,6 @@
 package com.pmrgsolution.core.service;
 
-import com.pmrgsolution.Exception.BusinessException;
+import com.pmrgsolution.exception.BusinessException;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;

@@ -1,6 +1,6 @@
 package com.pmrgsolution.core.service;
 
-import com.pmrgsolution.Exception.BusinessException;
+import com.pmrgsolution.exception.BusinessException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Primary;
@@ -42,6 +42,10 @@ public class SupabaseFileStorageServiceImpl implements FileStorageService {
 
     @Override
     public String storeFile(MultipartFile file, String subDirectory) {
+        if (file == null || file.isEmpty()) {
+            throw new BusinessException("Cannot store empty file", HttpStatus.BAD_REQUEST);
+        }
+
         // Fallback to local storage if Supabase credentials are not provided
         if (supabaseUrl == null || supabaseUrl.isBlank() || supabaseKey == null || supabaseKey.isBlank()) {
             log.warn("Supabase credentials not configured. Falling back to local filesystem storage.");
@@ -49,28 +53,46 @@ public class SupabaseFileStorageServiceImpl implements FileStorageService {
         }
 
         try {
-            // 🛡️ SECURITY & OPTIMIZATION: Validate 5 layers, resize to max 1920px, and compress to ~200KB JPEG
-            byte[] optimizedBytes = imageOptimizerService.validateAndOptimizeImage(file);
+            String originalFilename = file.getOriginalFilename();
+            String contentType = file.getContentType();
+            boolean isPdf = (contentType != null && contentType.equalsIgnoreCase("application/pdf"))
+                    || (originalFilename != null && originalFilename.toLowerCase().endsWith(".pdf"));
 
-            // Generate clean UUID filename (always .jpg for normalized high-speed web rendering)
-            String secureName = UUID.randomUUID().toString() + ".jpg";
+            byte[] uploadBytes;
+            String secureName;
+            MediaType uploadMediaType;
+
+            if (isPdf) {
+                if (file.getSize() > 10 * 1024 * 1024) {
+                    throw new BusinessException("PDF receipt file size exceeds 10MB limit", HttpStatus.BAD_REQUEST);
+                }
+                uploadBytes = file.getBytes();
+                if (uploadBytes.length < 5 || uploadBytes[0] != 0x25 || uploadBytes[1] != 0x50 || uploadBytes[2] != 0x44 || uploadBytes[3] != 0x46) {
+                    throw new BusinessException("Invalid PDF file structure", HttpStatus.BAD_REQUEST);
+                }
+                secureName = UUID.randomUUID().toString() + ".pdf";
+                uploadMediaType = MediaType.APPLICATION_PDF;
+            } else {
+                uploadBytes = imageOptimizerService.validateAndOptimizeImage(file);
+                secureName = UUID.randomUUID().toString() + ".jpg";
+                uploadMediaType = MediaType.IMAGE_JPEG;
+            }
+
             String objectPath = (subDirectory != null && !subDirectory.isBlank()) 
                     ? subDirectory + "/" + secureName 
                     : secureName;
 
-            // Ensure bucket exists in Supabase (auto-create public bucket if missing)
             ensureBucketExists();
 
-            // Construct Supabase Storage upload URL: POST {SUPABASE_URL}/storage/v1/object/{bucket}/{objectPath}
             String uploadUrl = String.format("%s/storage/v1/object/%s/%s", 
                     cleanUrl(supabaseUrl), bucketName, objectPath);
 
             HttpHeaders headers = new HttpHeaders();
             headers.set("Authorization", "Bearer " + supabaseKey);
             headers.set("apikey", supabaseKey);
-            headers.setContentType(MediaType.IMAGE_JPEG);
+            headers.setContentType(uploadMediaType);
 
-            HttpEntity<byte[]> requestEntity = new HttpEntity<>(optimizedBytes, headers);
+            HttpEntity<byte[]> requestEntity = new HttpEntity<>(uploadBytes, headers);
 
             ResponseEntity<String> response = restTemplate.exchange(
                     uploadUrl,
@@ -80,10 +102,9 @@ public class SupabaseFileStorageServiceImpl implements FileStorageService {
             );
 
             if (response.getStatusCode().is2xxSuccessful()) {
-                // Public CDN URL: {SUPABASE_URL}/storage/v1/object/public/{bucket}/{objectPath}
                 String publicUrl = String.format("%s/storage/v1/object/public/%s/%s",
                         cleanUrl(supabaseUrl), bucketName, objectPath);
-                log.info("Successfully uploaded optimized image to Supabase: {}", publicUrl);
+                log.info("Successfully uploaded file to Supabase: {}", publicUrl);
                 return publicUrl;
             } else {
                 log.warn("Supabase upload returned non-2xx status: {}. Falling back to local storage.", response.getStatusCode());
@@ -109,7 +130,6 @@ public class SupabaseFileStorageServiceImpl implements FileStorageService {
             return;
         }
 
-        // If it's a local file, delegate to local service
         if (fileUrl.startsWith("/uploads/")) {
             localFallbackService.deleteFile(fileUrl);
             return;
@@ -157,9 +177,8 @@ public class SupabaseFileStorageServiceImpl implements FileStorageService {
                 try {
                     restTemplate.exchange(checkUrl, HttpMethod.GET, checkEntity, String.class);
                     bucketVerified = true;
-                    return; // Bucket exists
+                    return;
                 } catch (Exception ex) {
-                    // If 404, attempt auto-creation
                     log.info("Supabase bucket '{}' not found. Creating public bucket automatically...", bucketName);
                     String createUrl = String.format("%s/storage/v1/bucket", cleanUrl(supabaseUrl));
                     String body = String.format("{\"id\":\"%s\",\"name\":\"%s\",\"public\":true}", bucketName, bucketName);
@@ -169,7 +188,7 @@ public class SupabaseFileStorageServiceImpl implements FileStorageService {
                     log.info("Successfully created public Supabase bucket '{}'.", bucketName);
                 }
             } catch (Exception e) {
-                bucketVerified = true; // Prevent repeated blocking calls if bucket already exists
+                bucketVerified = true;
                 log.warn("Could not auto-verify/create Supabase bucket: {}", e.getMessage());
             }
         }

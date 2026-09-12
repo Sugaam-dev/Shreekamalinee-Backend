@@ -38,7 +38,10 @@ public class ProductSpecifications {
 
             // 2. Gender filter
             if (gender != null && !gender.isBlank()) {
-                predicates.add(cb.equal(cb.lower(root.get("genderCategory")), gender.trim().toLowerCase()));
+                com.pmrgsolution.constant.GenderCategory gc = com.pmrgsolution.constant.GenderCategory.fromString(gender);
+                if (gc != null) {
+                    predicates.add(cb.equal(root.get("genderCategory"), gc));
+                }
             }
 
             // 3. Brand filter

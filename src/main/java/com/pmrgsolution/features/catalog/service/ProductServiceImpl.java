@@ -1,7 +1,8 @@
 package com.pmrgsolution.features.catalog.service;
 
-import com.pmrgsolution.Exception.ResourceNotFoundException;
-import com.pmrgsolution.Exception.BusinessException;
+import com.pmrgsolution.constant.GenderCategory;
+import com.pmrgsolution.exception.ResourceNotFoundException;
+import com.pmrgsolution.exception.BusinessException;
 import com.pmrgsolution.features.catalog.dto.*;
 import com.pmrgsolution.features.catalog.entity.*;
 import com.pmrgsolution.features.catalog.repository.*;
@@ -36,6 +37,9 @@ public class ProductServiceImpl implements ProductService {
     private final CategoryRepository categoryRepository;
     private final FileStorageService fileStorageService;
     private final ReviewRepository reviewRepository;
+    private final com.pmrgsolution.features.wishlist.repository.WishlistItemRepository wishlistItemRepository;
+    private final com.pmrgsolution.features.order.repository.OrderItemRepository orderItemRepository;
+    private final com.pmrgsolution.core.service.RealtimeEventService realtimeEventService;
 
     @Override
     @Transactional(readOnly = true)
@@ -43,7 +47,7 @@ public class ProductServiceImpl implements ProductService {
     public List<CategoryResponse> getAllCategories() {
         return categoryRepository.findAll().stream()
                 .map(this::mapToCategoryResponse)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Override
@@ -52,7 +56,7 @@ public class ProductServiceImpl implements ProductService {
     public List<CategoryResponse> getMainCategories() {
         return categoryRepository.findByParentCategoryIsNull().stream()
                 .map(this::mapToCategoryResponse)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Override
@@ -65,7 +69,7 @@ public class ProductServiceImpl implements ProductService {
 
         return subcategories.stream()
                 .map(this::mapToCategoryResponse)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Override
@@ -106,7 +110,10 @@ public class ProductServiceImpl implements ProductService {
                 .imageUrl(request.getImageUrl())
                 .suggestedAttributes(suggestedAttributes)
                 .build();
-        return mapToCategoryResponse(categoryRepository.save(category));
+        Category saved = categoryRepository.save(category);
+        CategoryResponse response = mapToCategoryResponse(saved);
+        realtimeEventService.broadcast("CATEGORY_UPDATED", "{\"type\":\"CATEGORY_UPDATED\",\"categoryId\":\"" + saved.getId() + "\"}");
+        return response;
     }
 
     @Override
@@ -158,7 +165,10 @@ public class ProductServiceImpl implements ProductService {
             category.setSuggestedAttributes(request.getSuggestedAttributes());
         }
 
-        return mapToCategoryResponse(categoryRepository.save(category));
+        Category saved = categoryRepository.save(category);
+        CategoryResponse response = mapToCategoryResponse(saved);
+        realtimeEventService.broadcast("CATEGORY_UPDATED", "{\"type\":\"CATEGORY_UPDATED\",\"categoryId\":\"" + saved.getId() + "\"}");
+        return response;
     }
 
     @Override
@@ -169,17 +179,33 @@ public class ProductServiceImpl implements ProductService {
         Category category = categoryRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Category not found"));
 
-        // 1. Safely unlink any products assigned to this category
-        productRepository.unlinkCategoryFromProducts(id);
+        // 1. If Root Category, check if it contains subcategories
+        long subcategoryCount = categoryRepository.countByParentCategoryId(id);
+        if (subcategoryCount > 0) {
+            throw new BusinessException(
+                "Cannot delete category '" + category.getName() + "'. It contains " + subcategoryCount +
+                " subcategor" + (subcategoryCount == 1 ? "y" : "ies") + ". Please delete or reassign them first.",
+                HttpStatus.CONFLICT
+            );
+        }
 
-        // 2. Safely unlink any subcategories so they don't break foreign keys
-        categoryRepository.unlinkParentCategory(id);
+        // 2. Check if any products are assigned directly to this category or subcategory
+        long productCount = productRepository.countByCategoryId(id);
+        if (productCount > 0) {
+            String categoryType = category.getParentCategory() != null ? "subcategory" : "category";
+            throw new BusinessException(
+                "Cannot delete " + categoryType + " '" + category.getName() + "'. It contains " + productCount +
+                " product" + (productCount == 1 ? "" : "s") + ". Please reassign or delete the products first.",
+                HttpStatus.CONFLICT
+            );
+        }
 
-        // 3. Delete category
+        // 3. Delete category when 0 subcategories and 0 products
         String oldImageUrl = category.getImageUrl();
         categoryRepository.delete(category);
+        realtimeEventService.broadcast("CATEGORY_UPDATED", "{\"type\":\"CATEGORY_UPDATED\",\"categoryId\":\"" + id + "\"}");
 
-        // 4. Delete image from CDN
+        // 4. Delete image from CDN/storage
         if (oldImageUrl != null && !oldImageUrl.isBlank()) {
             try {
                 fileStorageService.deleteFile(oldImageUrl);
@@ -204,37 +230,32 @@ public class ProductServiceImpl implements ProductService {
             Integer minDiscount,
             String sortBy) {
 
-        Sort sort;
-        if ("newest".equalsIgnoreCase(sortBy)) {
-            sort = Sort.by(Sort.Direction.DESC, "createdAt");
-        } else if ("priceasc".equalsIgnoreCase(sortBy)) {
-            sort = Sort.by(Sort.Direction.ASC, "offerPrice");
-        } else if ("pricedesc".equalsIgnoreCase(sortBy)) {
-            sort = Sort.by(Sort.Direction.DESC, "offerPrice");
-        } else {
-            sort = Sort.by(Sort.Direction.DESC, "createdAt");
-        }
+        Sort sort = switch (sortBy != null ? sortBy.toLowerCase().trim() : "newest") {
+            case "priceasc" -> Sort.by(Sort.Direction.ASC, "offerPrice");
+            case "pricedesc" -> Sort.by(Sort.Direction.DESC, "offerPrice");
+            default -> Sort.by(Sort.Direction.DESC, "createdAt");
+        };
 
         Specification<Product> spec = ProductSpecifications.withFilters(
                 categoryId, gender, brand, search, season, minPrice, maxPrice, inStock);
 
         List<Product> products = productRepository.findAll(spec, sort);
 
-        List<ProductDTO> result = products.stream()
+        List<ProductDTO> result = new ArrayList<>(products.stream()
                 .map(this::mapToProductDTO)
-                .collect(Collectors.toList());
+                .toList());
 
         // Computed post-filters (rating and discount % are calculated)
         if (minDiscount != null && minDiscount > 0) {
-            result = result.stream()
+            result = new ArrayList<>(result.stream()
                     .filter(p -> p.getDiscountPercentage() != null && p.getDiscountPercentage() >= minDiscount)
-                    .collect(Collectors.toList());
+                    .toList());
         }
 
         if (minRating != null && minRating > 0.0) {
-            result = result.stream()
+            result = new ArrayList<>(result.stream()
                     .filter(p -> p.getAverageRating() != null && p.getAverageRating() >= minRating)
-                    .collect(Collectors.toList());
+                    .toList());
         }
 
         // Exact effective price sort on DTO if priceasc/pricedesc requested
@@ -278,7 +299,7 @@ public class ProductServiceImpl implements ProductService {
                 .originalPrice(request.getOriginalPrice())
                 .offerPrice(request.getOfferPrice())
                 .sku(productSku)
-                .genderCategory(request.getGenderCategory().toUpperCase())
+                .genderCategory(request.getGenderCategory() != null ? request.getGenderCategory() : GenderCategory.WOMEN)
                 .season(request.getSeason())
                 .artisanalStory(request.getArtisanalStory())
                 .fabricCare(request.getFabricCare())
@@ -309,7 +330,10 @@ public class ProductServiceImpl implements ProductService {
         }
 
         Product savedProduct = productRepository.save(product);
-        return mapToProductDTO(savedProduct);
+        ProductDTO dto = mapToProductDTO(savedProduct);
+        realtimeEventService.broadcast("PRODUCT_CREATED", "{\"type\":\"PRODUCT_CREATED\",\"productId\":\"" + savedProduct.getId() + "\"}");
+        realtimeEventService.broadcast("PRODUCT_UPDATED", "{\"type\":\"PRODUCT_UPDATED\",\"productId\":\"" + savedProduct.getId() + "\"}");
+        return dto;
     }
 
     @Override
@@ -333,7 +357,9 @@ public class ProductServiceImpl implements ProductService {
         product.setOriginalPrice(request.getOriginalPrice());
         product.setOfferPrice(request.getOfferPrice());
         product.setSku(newProductSku);
-        product.setGenderCategory(request.getGenderCategory().toUpperCase());
+        if (request.getGenderCategory() != null) {
+            product.setGenderCategory(request.getGenderCategory());
+        }
         product.setSeason(request.getSeason());
         product.setArtisanalStory(request.getArtisanalStory());
         product.setFabricCare(request.getFabricCare());
@@ -398,7 +424,9 @@ public class ProductServiceImpl implements ProductService {
         }
 
         Product savedProduct = productRepository.save(product);
-        return mapToProductDTO(savedProduct);
+        ProductDTO dto = mapToProductDTO(savedProduct);
+        realtimeEventService.broadcast("PRODUCT_UPDATED", "{\"type\":\"PRODUCT_UPDATED\",\"productId\":\"" + savedProduct.getId() + "\"}");
+        return dto;
     }
 
     private String generateUniqueVariantSku(Product product, VariantRequest vReq, Set<String> usedSkus) {
@@ -430,7 +458,18 @@ public class ProductServiceImpl implements ProductService {
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
 
         List<String> imagesToDelete = product.getImageUrls() != null ? new ArrayList<>(product.getImageUrls()) : List.of();
+
+        // 1. Clean up associated wishlist entries and reviews
+        wishlistItemRepository.deleteByProductId(id);
+        reviewRepository.deleteByProductId(id);
+
+        // 2. Safely nullify product references on historic order items to preserve order records without FK violation
+        orderItemRepository.nullifyProductReferences(id);
+
+        // 3. Delete product entity (variants cascade delete automatically)
         productRepository.delete(product);
+        realtimeEventService.broadcast("PRODUCT_DELETED", "{\"type\":\"PRODUCT_DELETED\",\"productId\":\"" + id + "\"}");
+        realtimeEventService.broadcast("PRODUCT_UPDATED", "{\"type\":\"PRODUCT_UPDATED\",\"productId\":\"" + id + "\"}");
 
         for (String imgUrl : imagesToDelete) {
             if (imgUrl != null && !imgUrl.isBlank()) {
@@ -462,7 +501,10 @@ public class ProductServiceImpl implements ProductService {
                 .sku(request.getSku())
                 .build();
 
-        return mapToVariantDTO(productVariantRepository.save(variant));
+        ProductVariantDTO dto = mapToVariantDTO(productVariantRepository.save(variant));
+        realtimeEventService.broadcast("STOCK_UPDATED", "{\"type\":\"STOCK_UPDATED\",\"productId\":\"" + productId + "\"}");
+        realtimeEventService.broadcast("PRODUCT_UPDATED", "{\"type\":\"PRODUCT_UPDATED\",\"productId\":\"" + productId + "\"}");
+        return dto;
     }
 
     @Override
@@ -477,7 +519,10 @@ public class ProductServiceImpl implements ProductService {
         }
 
         variant.setStockQuantity(stock);
-        return mapToVariantDTO(productVariantRepository.save(variant));
+        ProductVariantDTO dto = mapToVariantDTO(productVariantRepository.save(variant));
+        realtimeEventService.broadcast("STOCK_UPDATED", "{\"type\":\"STOCK_UPDATED\",\"variantId\":\"" + variantId + "\"}");
+        realtimeEventService.broadcast("PRODUCT_UPDATED", "{\"type\":\"PRODUCT_UPDATED\",\"variantId\":\"" + variantId + "\"}");
+        return dto;
     }
 
     @Override
@@ -488,6 +533,8 @@ public class ProductServiceImpl implements ProductService {
             throw new ResourceNotFoundException("Variant not found");
         }
         productVariantRepository.deleteById(variantId);
+        realtimeEventService.broadcast("STOCK_UPDATED", "{\"type\":\"STOCK_UPDATED\",\"variantId\":\"" + variantId + "\"}");
+        realtimeEventService.broadcast("PRODUCT_UPDATED", "{\"type\":\"PRODUCT_UPDATED\",\"variantId\":\"" + variantId + "\"}");
     }
 
     // --- MAPPER HELPERS ---
@@ -513,7 +560,7 @@ public class ProductServiceImpl implements ProductService {
 
     private ProductDTO mapToProductDTO(Product product) {
         List<ProductVariantDTO> variants = product.getVariants() != null
-                ? product.getVariants().stream().map(this::mapToVariantDTO).collect(Collectors.toList())
+                ? product.getVariants().stream().map(this::mapToVariantDTO).toList()
                 : List.of();
 
         int totalStock = variants.stream().mapToInt(v -> v.getStockQuantity() != null ? v.getStockQuantity() : 0).sum();
@@ -602,7 +649,10 @@ public class ProductServiceImpl implements ProductService {
         }
         product.getImageUrls().add(imageUrl);
 
-        return mapToProductDTO(productRepository.save(product));
+        Product saved = productRepository.save(product);
+        ProductDTO dto = mapToProductDTO(saved);
+        realtimeEventService.broadcast("PRODUCT_UPDATED", "{\"type\":\"PRODUCT_UPDATED\",\"productId\":\"" + productId + "\"}");
+        return dto;
     }
 
     @Override
@@ -619,6 +669,7 @@ public class ProductServiceImpl implements ProductService {
             } catch (Exception e) {
                 log.warn("Failed to delete product image from storage '{}': {}", imageUrl, e.getMessage());
             }
+            realtimeEventService.broadcast("PRODUCT_UPDATED", "{\"type\":\"PRODUCT_UPDATED\",\"productId\":\"" + productId + "\"}");
             return mapToProductDTO(saved);
         }
         return mapToProductDTO(product);
@@ -635,6 +686,7 @@ public class ProductServiceImpl implements ProductService {
         String newImageUrl = fileStorageService.storeFile(file, "categories");
         category.setImageUrl(newImageUrl);
         Category saved = categoryRepository.save(category);
+        realtimeEventService.broadcast("CATEGORY_UPDATED", "{\"type\":\"CATEGORY_UPDATED\",\"categoryId\":\"" + categoryId + "\"}");
 
         // Clean up previous category image from Supabase
         if (oldImageUrl != null && !oldImageUrl.isBlank() && !oldImageUrl.equals(newImageUrl)) {

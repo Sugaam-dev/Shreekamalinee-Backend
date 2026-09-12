@@ -1,7 +1,10 @@
 package com.pmrgsolution.features.order.dto;
 
+import com.pmrgsolution.constant.PaymentMethod;
+import com.pmrgsolution.constant.PaymentStatus;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import lombok.*;
 
 import java.util.UUID;
@@ -17,6 +20,7 @@ public class AdminManualOrderRequest {
     private String customerName;
 
     @NotBlank(message = "Customer phone is required")
+    @Pattern(regexp = "^[0-9+() -]{10,15}$", message = "Please enter a valid phone number")
     private String customerPhone;
 
     private String customerEmail;
@@ -33,6 +37,7 @@ public class AdminManualOrderRequest {
     private String state;
 
     @NotBlank(message = "Postal Code is required")
+    @Pattern(regexp = "^[0-9]{6}$", message = "Postal code must be a 6-digit PIN code")
     private String postalCode;
 
     @NotNull(message = "Product ID is required")
@@ -45,15 +50,11 @@ public class AdminManualOrderRequest {
 
     private String couponCode;
 
-    @jakarta.validation.constraints.Pattern(
-            regexp = "^(?!.*(?i)razorpay).*$",
-            message = "Razorpay is not supported for manual admin orders. Please select WHATSAPP_UPI, DIRECT_BANK, or COD."
-    )
     @Builder.Default
-    private String paymentMethod = "WHATSAPP_UPI"; // Supported: WHATSAPP_UPI, DIRECT_BANK, COD
+    private PaymentMethod paymentMethod = PaymentMethod.UPI;
 
     @Builder.Default
-    private String paymentStatus = "PAID"; // PAID, PENDING
+    private PaymentStatus paymentStatus = PaymentStatus.PAID;
 
     private String notes;
 

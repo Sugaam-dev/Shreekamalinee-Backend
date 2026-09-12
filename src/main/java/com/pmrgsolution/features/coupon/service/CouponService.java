@@ -11,6 +11,7 @@ import java.util.UUID;
 public interface CouponService {
     void createCoupon(CouponRequest request);
     List<CouponResponse> getAllCoupons();
+    List<CouponResponse> getAvailableCouponsForUser(UUID userId, String userEmail);
     void deleteCoupon(UUID id);
     CouponValidationResponse validateCoupon(String code, BigDecimal subtotal, UUID userId);
     CouponValidationResponse validateCoupon(String code, BigDecimal subtotal, UUID userId, String userEmail);

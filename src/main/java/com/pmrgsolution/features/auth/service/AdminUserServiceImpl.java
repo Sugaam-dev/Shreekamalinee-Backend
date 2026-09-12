@@ -1,6 +1,6 @@
 package com.pmrgsolution.features.auth.service;
 
-import com.pmrgsolution.Exception.ResourceNotFoundException;
+import com.pmrgsolution.exception.ResourceNotFoundException;
 import com.pmrgsolution.features.auth.dto.AdminUserDTO;
 import com.pmrgsolution.features.auth.entity.User;
 import com.pmrgsolution.features.auth.repository.ActiveSessionRepository;
@@ -22,6 +22,7 @@ public class AdminUserServiceImpl implements AdminUserService {
     private final UserRepository userRepository;
     private final ActiveSessionRepository activeSessionRepository;
     private final EmailService emailService;
+    private final com.pmrgsolution.core.service.RealtimeEventService realtimeEventService;
 
     @Override
     @Transactional(readOnly = true)
@@ -35,7 +36,7 @@ public class AdminUserServiceImpl implements AdminUserService {
 
         return users.stream()
                 .map(this::mapToDTO)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Override
@@ -54,6 +55,7 @@ public class AdminUserServiceImpl implements AdminUserService {
         }
 
         User saved = userRepository.save(user);
+        realtimeEventService.broadcast("CUSTOMER_UPDATED", "{\"type\":\"CUSTOMER_UPDATED\",\"userId\":\"" + userId + "\"}");
 
         // Dispatch status alert email
         try {
@@ -79,7 +81,7 @@ public class AdminUserServiceImpl implements AdminUserService {
                 .fullName(!fullName.isBlank() ? fullName : u.getEmail().split("@")[0])
                 .email(u.getEmail())
                 .phoneNumber(u.getPhoneNumber())
-                .role(u.getRole() != null ? u.getRole().name() : "ROLE_CUSTOMER")
+                .role(u.getRole() != null ? u.getRole().name() : com.pmrgsolution.constant.Role.USER.name())
                 .enabled(u.isEnabled())
                 .createdAt(u.getCreatedAt())
                 .build();

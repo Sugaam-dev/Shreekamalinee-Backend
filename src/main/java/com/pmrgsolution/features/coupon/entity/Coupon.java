@@ -1,5 +1,6 @@
 package com.pmrgsolution.features.coupon.entity;
 
+import com.pmrgsolution.constant.DiscountType;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -33,8 +34,9 @@ public class Coupon {
     @Column(name = "coupon_code", unique = true)
     private String code;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "discount_type")
-    private String discountType; // PERCENTAGE, FIXED
+    private DiscountType discountType;
 
     @Column(name = "discount_value", precision = 10, scale = 2)
     private BigDecimal discountValue;

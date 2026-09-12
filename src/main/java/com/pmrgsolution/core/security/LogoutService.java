@@ -37,7 +37,7 @@ public class LogoutService implements LogoutHandler {
             jwt = authHeader.substring(7);
         } else if (request.getCookies() != null) {
             for (Cookie cookie : request.getCookies()) {
-                if ("shreekamalinee-jwt".equals(cookie.getName()) || "renaissance-jwt".equals(cookie.getName())) {
+                if ("shreekamalinee-jwt".equals(cookie.getName())) {
                     jwt = cookie.getValue();
                 }
             }

@@ -1,6 +1,8 @@
 package com.pmrgsolution.features.contact.service;
 
-import com.pmrgsolution.Exception.ResourceNotFoundException;
+import com.pmrgsolution.constant.ContactMessageStatus;
+import com.pmrgsolution.exception.BusinessException;
+import com.pmrgsolution.exception.ResourceNotFoundException;
 import com.pmrgsolution.features.contact.dto.ContactMessageRequest;
 import com.pmrgsolution.features.contact.dto.ContactMessageResponse;
 import com.pmrgsolution.features.contact.entity.ContactMessage;
@@ -9,12 +11,12 @@ import com.pmrgsolution.features.auth.service.EmailService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -23,6 +25,7 @@ public class ContactMessageServiceImpl implements ContactMessageService {
 
     private final ContactMessageRepository contactMessageRepository;
     private final EmailService emailService;
+    private final com.pmrgsolution.core.service.RealtimeEventService realtimeEventService;
 
     @Value("${app.admin.notification-email:${app.admin.email:admin@shreekamalinee.com}}")
     private String adminEmail;
@@ -36,11 +39,12 @@ public class ContactMessageServiceImpl implements ContactMessageService {
                 .phone(request.getPhone() != null ? request.getPhone().trim() : null)
                 .subject(request.getSubject() != null ? request.getSubject().trim() : "General Inquiry")
                 .message(request.getMessage().trim())
-                .status("NEW")
+                .status(ContactMessageStatus.NEW)
                 .build();
 
         ContactMessage saved = contactMessageRepository.save(message);
         log.info("Received new customer contact inquiry from '{}' <{}> with subject '{}'", saved.getName(), saved.getEmail(), saved.getSubject());
+        realtimeEventService.broadcast("INQUIRY_UPDATED", "{\"type\":\"INQUIRY_UPDATED\",\"id\":\"" + saved.getId() + "\"}");
 
         try {
             if (adminEmail != null && !adminEmail.isBlank()) {
@@ -64,12 +68,16 @@ public class ContactMessageServiceImpl implements ContactMessageService {
     @Transactional(readOnly = true)
     public List<ContactMessageResponse> getAllMessages(String statusFilter) {
         List<ContactMessage> messages;
-        if (statusFilter != null && !statusFilter.equalsIgnoreCase("all") && !statusFilter.isBlank()) {
-            messages = contactMessageRepository.findByStatusOrderByCreatedAtDesc(statusFilter.toUpperCase());
+        ContactMessageStatus parsedStatus = (statusFilter != null && !statusFilter.equalsIgnoreCase("all") && !statusFilter.isBlank())
+                ? ContactMessageStatus.fromString(statusFilter)
+                : null;
+
+        if (parsedStatus != null) {
+            messages = contactMessageRepository.findByStatusOrderByCreatedAtDesc(parsedStatus);
         } else {
             messages = contactMessageRepository.findAllByOrderByCreatedAtDesc();
         }
-        return messages.stream().map(this::mapToResponse).collect(Collectors.toList());
+        return messages.stream().map(this::mapToResponse).toList();
     }
 
     @Override
@@ -78,8 +86,15 @@ public class ContactMessageServiceImpl implements ContactMessageService {
         ContactMessage message = contactMessageRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Contact inquiry not found with id: " + id));
 
-        message.setStatus(status.toUpperCase().trim());
-        return mapToResponse(contactMessageRepository.save(message));
+        ContactMessageStatus newStatus = ContactMessageStatus.fromString(status);
+        if (newStatus == null) {
+            throw new BusinessException("Invalid message status: " + status, HttpStatus.BAD_REQUEST);
+        }
+
+        message.setStatus(newStatus);
+        ContactMessage saved = contactMessageRepository.save(message);
+        realtimeEventService.broadcast("INQUIRY_UPDATED", "{\"type\":\"INQUIRY_UPDATED\",\"id\":\"" + id + "\"}");
+        return mapToResponse(saved);
     }
 
     @Override
@@ -89,6 +104,7 @@ public class ContactMessageServiceImpl implements ContactMessageService {
             throw new ResourceNotFoundException("Contact inquiry not found with id: " + id);
         }
         contactMessageRepository.deleteById(id);
+        realtimeEventService.broadcast("INQUIRY_UPDATED", "{\"type\":\"INQUIRY_UPDATED\",\"id\":\"" + id + "\"}");
     }
 
     private ContactMessageResponse mapToResponse(ContactMessage entity) {

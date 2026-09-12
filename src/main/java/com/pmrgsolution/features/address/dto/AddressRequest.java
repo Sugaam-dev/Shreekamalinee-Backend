@@ -1,6 +1,8 @@
 package com.pmrgsolution.features.address.dto;
 
+import com.pmrgsolution.constant.AddressType;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import lombok.*;
 
 @Getter
@@ -13,6 +15,7 @@ public class AddressRequest {
     private String fullName;
 
     @NotBlank(message = "Phone number is required")
+    @Pattern(regexp = "^[0-9+() -]{10,15}$", message = "Please enter a valid phone number")
     private String phoneNumber;
 
     private String alternatePhone;
@@ -29,23 +32,22 @@ public class AddressRequest {
     private String state;
 
     @NotBlank(message = "Postal code is required")
+    @Pattern(regexp = "^[0-9]{6}$", message = "Postal code must be a 6-digit PIN code")
     private String postalCode;
 
-    private String country;
-    private String addressType;
+    @Builder.Default
+    private String country = "India";
+
+    @Builder.Default
+    private AddressType addressType = AddressType.HOME;
+
     private Boolean isDefault;
 
     public String getCleanPhoneNumber() {
-        if (phoneNumber == null) return "";
-        String digits = phoneNumber.replaceAll("[^0-9]", "");
-        if (digits.startsWith("91") && digits.length() == 12) {
-            return digits.substring(2);
-        }
-        return digits.length() >= 10 ? digits.substring(digits.length() - 10) : digits;
+        return phoneNumber != null ? phoneNumber.replaceAll("\\s+", "").trim() : "";
     }
 
     public String getCleanPostalCode() {
-        if (postalCode == null) return "";
-        return postalCode.replaceAll("[^0-9]", "").trim();
+        return postalCode != null ? postalCode.replaceAll("\\s+", "").trim() : "";
     }
 }

@@ -1,5 +1,6 @@
 package com.pmrgsolution.features.address.entity;
 
+import com.pmrgsolution.constant.AddressType;
 import com.pmrgsolution.features.auth.entity.User;
 import jakarta.persistence.*;
 import lombok.*;
@@ -60,9 +61,10 @@ public class ShippingAddress {
     @Builder.Default
     private String country = "India";
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "address_type")
     @Builder.Default
-    private String addressType = "Home"; // Home, Work, Other
+    private AddressType addressType = AddressType.HOME;
 
     @Column(name = "is_default", nullable = false)
     @Builder.Default

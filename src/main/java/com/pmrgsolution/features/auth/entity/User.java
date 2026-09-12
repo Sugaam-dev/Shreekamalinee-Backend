@@ -5,8 +5,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
-import com.pmrgsolution.Constant.AuthProvider;
-import com.pmrgsolution.Constant.Role;
+import com.pmrgsolution.constant.AuthProvider;
+import com.pmrgsolution.constant.Role;
 import com.pmrgsolution.features.payment.entity.Transaction;
 import com.pmrgsolution.features.order.entity.Order;
 import com.pmrgsolution.features.address.entity.ShippingAddress;

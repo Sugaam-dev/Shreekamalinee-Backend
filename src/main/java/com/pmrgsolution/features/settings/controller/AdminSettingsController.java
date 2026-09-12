@@ -2,6 +2,7 @@ package com.pmrgsolution.features.settings.controller;
 
 import com.pmrgsolution.features.settings.dto.*;
 import com.pmrgsolution.features.settings.service.StoreSettingsService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -22,22 +23,22 @@ public class AdminSettingsController {
     }
 
     @PutMapping("/shipping")
-    public ResponseEntity<ShippingSettingsResponse> updateShippingSettings(@RequestBody ShippingSettingsRequest request) {
+    public ResponseEntity<ShippingSettingsResponse> updateShippingSettings(@Valid @RequestBody ShippingSettingsRequest request) {
         return ResponseEntity.ok(storeSettingsService.updateShippingSettings(request));
     }
 
     @PutMapping("/announcement")
-    public ResponseEntity<AnnouncementSettingsResponse> updateAnnouncementSettings(@RequestBody AnnouncementSettingsRequest request) {
+    public ResponseEntity<AnnouncementSettingsResponse> updateAnnouncementSettings(@Valid @RequestBody AnnouncementSettingsRequest request) {
         return ResponseEntity.ok(storeSettingsService.updateAnnouncementSettings(request));
     }
 
     @PutMapping("/contact")
-    public ResponseEntity<ContactSettingsResponse> updateContactSettings(@RequestBody ContactSettingsRequest request) {
+    public ResponseEntity<ContactSettingsResponse> updateContactSettings(@Valid @RequestBody ContactSettingsRequest request) {
         return ResponseEntity.ok(storeSettingsService.updateContactSettings(request));
     }
 
     @PutMapping("/banking")
-    public ResponseEntity<StoreSettingsResponse> updateBankingSettings(@RequestBody BankingSettingsRequest request) {
+    public ResponseEntity<StoreSettingsResponse> updateBankingSettings(@Valid @RequestBody BankingSettingsRequest request) {
         return ResponseEntity.ok(storeSettingsService.updateBankingSettings(request));
     }
 

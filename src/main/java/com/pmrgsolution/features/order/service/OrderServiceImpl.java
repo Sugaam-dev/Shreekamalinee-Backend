@@ -1,7 +1,11 @@
 package com.pmrgsolution.features.order.service;
 
-import com.pmrgsolution.Exception.BusinessException;
-import com.pmrgsolution.Exception.ResourceNotFoundException;
+import com.pmrgsolution.constant.AddressType;
+import com.pmrgsolution.constant.OrderStatus;
+import com.pmrgsolution.constant.PaymentMethod;
+import com.pmrgsolution.constant.PaymentStatus;
+import com.pmrgsolution.exception.BusinessException;
+import com.pmrgsolution.exception.ResourceNotFoundException;
 import com.pmrgsolution.features.address.dto.AddressResponse;
 import com.pmrgsolution.features.address.entity.ShippingAddress;
 import com.pmrgsolution.features.address.repository.ShippingAddressRepository;
@@ -73,6 +77,8 @@ public class OrderServiceImpl implements OrderService {
     private final TransactionRepository transactionRepository;
     private final PasswordEncoder passwordEncoder;
     private final org.springframework.data.redis.core.StringRedisTemplate redisTemplate;
+    private final com.pmrgsolution.core.service.RealtimeEventService realtimeEventService;
+    private final com.pmrgsolution.core.service.FileStorageService fileStorageService;
 
     @Value("${app.admin.notification-email:${app.admin.email:admin@shreekamalinee.com}}")
     private String adminEmail;
@@ -159,7 +165,7 @@ public class OrderServiceImpl implements OrderService {
             if (request.getSelectedCartItemIds() != null && !request.getSelectedCartItemIds().isEmpty()) {
                 purchasedCartItems = allCartItems.stream()
                         .filter(ci -> request.getSelectedCartItemIds().contains(ci.getId()))
-                        .collect(Collectors.toList());
+                        .toList();
             } else {
                 purchasedCartItems = allCartItems;
             }
@@ -206,7 +212,7 @@ public class OrderServiceImpl implements OrderService {
         }
 
         BigDecimal codHandlingFee = BigDecimal.ZERO;
-        if ("COD".equalsIgnoreCase(request.getPaymentMethod())) {
+        if (request.getPaymentMethod() == PaymentMethod.COD) {
             BigDecimal baseCodFee = settings.getCodHandlingFee() != null ? settings.getCodHandlingFee() : BigDecimal.valueOf(99.00);
             BigDecimal freeCodThreshold = settings.getFreeCodThreshold() != null ? settings.getFreeCodThreshold() : BigDecimal.valueOf(2999.00);
             if (subtotal.compareTo(freeCodThreshold) >= 0) {
@@ -235,9 +241,9 @@ public class OrderServiceImpl implements OrderService {
                 .shippingFee(shippingFee)
                 .codHandlingFee(codHandlingFee)
                 .finalAmount(finalAmount)
-                .paymentMethod(request.getPaymentMethod().toUpperCase())
-                .paymentStatus("PENDING")
-                .status("PENDING")
+                .paymentMethod(request.getPaymentMethod() != null ? request.getPaymentMethod() : PaymentMethod.COD)
+                .paymentStatus(PaymentStatus.PENDING)
+                .status(OrderStatus.PLACED)
                 .couponCode(appliedCoupon != null ? appliedCoupon.getCode() : null)
                 .notes(request.getNotes())
                 .build();
@@ -283,13 +289,13 @@ public class OrderServiceImpl implements OrderService {
         // Stock is deducted immediately ONLY for Cash On Delivery (COD) or instant pre-paid orders.
         // For Manual UPI / QR / Bank Transfer & Razorpay & WhatsApp, stock is NOT deducted on order initialization;
         // it is deducted when the user submits payment proof or Razorpay verification succeeds.
-        if ("COD".equalsIgnoreCase(savedOrder.getPaymentMethod()) || "PAID".equalsIgnoreCase(savedOrder.getPaymentStatus())) {
+        if (savedOrder.getPaymentMethod() == PaymentMethod.COD || savedOrder.getPaymentStatus() == PaymentStatus.PAID) {
             deductOrderStock(savedOrder);
         }
 
         // Only record coupon usage if payment is confirmed (e.g. COD or immediate PAID)
         // For Manual UPI & Razorpay, coupon usage is recorded upon payment receipt upload / payment verification
-        if (appliedCoupon != null && ("COD".equalsIgnoreCase(savedOrder.getPaymentMethod()) || "PAID".equalsIgnoreCase(savedOrder.getPaymentStatus()))) {
+        if (appliedCoupon != null && (savedOrder.getPaymentMethod() == PaymentMethod.COD || savedOrder.getPaymentStatus() == PaymentStatus.PAID)) {
             // SECURITY FIX: Use atomic DB-level increment to prevent race condition
             couponRepository.incrementTimesUsed(appliedCoupon.getId());
 
@@ -302,7 +308,7 @@ public class OrderServiceImpl implements OrderService {
         }
 
         // Customer Confirmation Email (Only for confirmed COD or already PAID orders)
-        if ("COD".equalsIgnoreCase(savedOrder.getPaymentMethod()) || "PAID".equalsIgnoreCase(savedOrder.getPaymentStatus())) {
+        if (savedOrder.getPaymentMethod() == PaymentMethod.COD || savedOrder.getPaymentStatus() == PaymentStatus.PAID) {
             try {
                 emailService.sendOrderConfirmationEmail(user.getEmail(), buildEmailContext(savedOrder));
             } catch (Exception e) {
@@ -311,7 +317,7 @@ public class OrderServiceImpl implements OrderService {
         }
 
         // Admin Notification Email Alert (Only for confirmed COD or already PAID orders — NOT for unverified pending UPI orders)
-        if ("COD".equalsIgnoreCase(savedOrder.getPaymentMethod()) || "PAID".equalsIgnoreCase(savedOrder.getPaymentStatus())) {
+        if (savedOrder.getPaymentMethod() == PaymentMethod.COD || savedOrder.getPaymentStatus() == PaymentStatus.PAID) {
             try {
                 if (adminEmail != null && !adminEmail.isBlank()) {
                     // Build context once and reuse for both admin alerts
@@ -327,6 +333,9 @@ public class OrderServiceImpl implements OrderService {
         }
 
         OrderResponse response = mapToResponse(savedOrder);
+        realtimeEventService.broadcast("ORDER_UPDATED", "{\"type\":\"ORDER_UPDATED\",\"orderId\":\"" + savedOrder.getId() + "\",\"orderNumber\":\"" + savedOrder.getOrderNumber() + "\"}");
+        realtimeEventService.broadcast("STOCK_UPDATED", "{\"type\":\"STOCK_UPDATED\"}");
+
         // Record idempotency key in Redis with TTL so future duplicates are rejected
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             try {
@@ -367,11 +376,8 @@ public class OrderServiceImpl implements OrderService {
             throw new BusinessException("Product selection is required for manual order", HttpStatus.BAD_REQUEST);
         }
 
-        if (request.getPaymentMethod() != null) {
-            String pm = request.getPaymentMethod().trim().toUpperCase();
-            if (pm.contains("RAZORPAY") || pm.equals("RAZOR_PAY") || pm.equals("ONLINE")) {
-                throw new BusinessException("Razorpay online payment is not supported for manual admin orders. Please choose WHATSAPP_UPI, DIRECT_BANK, or COD.", HttpStatus.BAD_REQUEST);
-            }
+        if (request.getPaymentMethod() == PaymentMethod.RAZORPAY) {
+            throw new BusinessException("Razorpay online payment is not supported for manual admin orders. Please choose DIRECT_UPI, MANUAL, or COD.", HttpStatus.BAD_REQUEST);
         }
 
         // 1. Find or create User by email/phone
@@ -392,10 +398,10 @@ public class OrderServiceImpl implements OrderService {
                             .lastName(lName)
                             .email(cleanEmail)
                             .phoneNumber(cleanPhone)
-                            .role(com.pmrgsolution.Constant.Role.USER)
+                            .role(com.pmrgsolution.constant.Role.USER)
                             .enabled(true)
                             .accountNonLocked(true)
-                            .provider(com.pmrgsolution.Constant.AuthProvider.LOCAL)
+                            .provider(com.pmrgsolution.constant.AuthProvider.LOCAL)
                             // SECURITY FIX: Encode the random password with BCrypt.
                             // Previously a raw UUID string was stored, violating the
                             // encoding contract. The password is still random & unusable.
@@ -415,7 +421,7 @@ public class OrderServiceImpl implements OrderService {
                 .state(request.getState())
                 .postalCode(request.getPostalCode())
                 .country("India")
-                .addressType("MANUAL_ORDER")
+                .addressType(AddressType.MANUAL_ORDER)
                 .isDefault(false)
                 .build();
         address = shippingAddressRepository.save(address);
@@ -464,9 +470,9 @@ public class OrderServiceImpl implements OrderService {
             shippingFee = baseShippingFee;
         }
 
-        String payMethod = request.getPaymentMethod() != null ? request.getPaymentMethod().toUpperCase() : "WHATSAPP_UPI";
+        PaymentMethod payMethod = request.getPaymentMethod() != null ? request.getPaymentMethod() : PaymentMethod.UPI;
         BigDecimal codHandlingFee = BigDecimal.ZERO;
-        if ("COD".equalsIgnoreCase(payMethod)) {
+        if (payMethod == PaymentMethod.COD) {
             BigDecimal baseCodFee = settings.getCodHandlingFee() != null ? settings.getCodHandlingFee() : BigDecimal.valueOf(99.00);
             BigDecimal freeCodThreshold = settings.getFreeCodThreshold() != null ? settings.getFreeCodThreshold() : BigDecimal.valueOf(2999.00);
             if (subtotal.compareTo(freeCodThreshold) >= 0) {
@@ -486,8 +492,8 @@ public class OrderServiceImpl implements OrderService {
             orderNumber = "SK-" + datePart + "-" + randomPart;
         } while (orderRepository.findByOrderNumber(orderNumber).isPresent());
 
-        String payStatus = "PAID".equalsIgnoreCase(request.getPaymentStatus()) ? "PAID" : "PENDING";
-        String orderStatus = "PAID".equals(payStatus) ? "PROCESSING" : "PLACED";
+        PaymentStatus payStatus = request.getPaymentStatus() != null ? request.getPaymentStatus() : PaymentStatus.PAID;
+        OrderStatus orderStatus = (payStatus == PaymentStatus.PAID) ? OrderStatus.PROCESSING : OrderStatus.PLACED;
 
         Order order = Order.builder()
                 .orderNumber(orderNumber)
@@ -538,6 +544,7 @@ public class OrderServiceImpl implements OrderService {
                 .order(order)
                 .user(user)
                 .amount(finalAmount)
+                .gateway(com.pmrgsolution.constant.PaymentGateway.DIRECT_UPI)
                 .paymentMethod(payMethod)
                 .status(payStatus)
                 .transactionId("MANUAL-" + orderNumber)
@@ -554,6 +561,9 @@ public class OrderServiceImpl implements OrderService {
                 log.warn("Failed to dispatch manual order confirmation email to {}: {}", cleanEmail, e.getMessage());
             }
         }
+
+        realtimeEventService.broadcast("ORDER_UPDATED", "{\"type\":\"ORDER_UPDATED\",\"orderId\":\"" + order.getId() + "\",\"orderNumber\":\"" + order.getOrderNumber() + "\"}");
+        realtimeEventService.broadcast("STOCK_UPDATED", "{\"type\":\"STOCK_UPDATED\"}");
 
         return mapToResponse(order);
     }
@@ -608,26 +618,33 @@ public class OrderServiceImpl implements OrderService {
         Order order = orderRepository.findByIdAndUserId(orderId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
 
-        if (!"PENDING".equalsIgnoreCase(order.getStatus()) && !"CONFIRMED".equalsIgnoreCase(order.getStatus())) {
+        if (order.getStatus() != OrderStatus.PLACED && order.getStatus() != OrderStatus.CONFIRMED && order.getStatus() != OrderStatus.PAYMENT_PROOF_SUBMITTED) {
             throw new BusinessException("Order cannot be cancelled in status: " + order.getStatus(), HttpStatus.BAD_REQUEST);
         }
 
-        order.setStatus("CANCELLED");
-        if ("PAID".equalsIgnoreCase(order.getPaymentStatus())) {
-            order.setPaymentStatus("REFUND_PENDING");
+        order.setStatus(OrderStatus.CANCELLED);
+        if (order.getPaymentStatus() == PaymentStatus.PAID) {
+            order.setPaymentStatus(PaymentStatus.REFUND_PENDING);
         }
 
         restoreOrderStock(order);
 
-        return mapToResponse(orderRepository.save(order));
+        Order saved = orderRepository.save(order);
+        realtimeEventService.broadcast("ORDER_UPDATED", "{\"type\":\"ORDER_UPDATED\",\"orderId\":\"" + saved.getId() + "\",\"orderNumber\":\"" + saved.getOrderNumber() + "\"}");
+        realtimeEventService.broadcast("STOCK_UPDATED", "{\"type\":\"STOCK_UPDATED\"}");
+        return mapToResponse(saved);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<OrderResponse> getAllOrdersAdmin(String status, Pageable pageable) {
         Page<Order> page;
-        if (status != null && !status.isBlank() && !"ALL".equalsIgnoreCase(status)) {
-            page = orderRepository.findByStatusOrderByCreatedAtDesc(status.toUpperCase(), pageable);
+        OrderStatus orderStatusFilter = (status != null && !status.isBlank() && !"ALL".equalsIgnoreCase(status))
+                ? OrderStatus.fromString(status)
+                : null;
+
+        if (orderStatusFilter != null) {
+            page = orderRepository.findByStatusOrderByCreatedAtDesc(orderStatusFilter, pageable);
         } else {
             page = orderRepository.findAllByOrderByCreatedAtDesc(pageable);
         }
@@ -641,17 +658,17 @@ public class OrderServiceImpl implements OrderService {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
 
-        String newStatus = request.getStatus().toUpperCase();
+        OrderStatus newStatus = request.getStatus();
 
-        if ("CANCELLED".equals(newStatus) && !"CANCELLED".equals(order.getStatus())) {
-            order.setStatus("CANCELLED");
+        if (newStatus == OrderStatus.CANCELLED && order.getStatus() != OrderStatus.CANCELLED) {
+            order.setStatus(OrderStatus.CANCELLED);
             if (request.getCancellationReason() != null && !request.getCancellationReason().isBlank()) {
                 order.setCancellationReason(request.getCancellationReason().trim());
             } else if (order.getCancellationReason() == null) {
                 order.setCancellationReason("Cancelled by Store Administrator");
             }
-            if ("PAID".equalsIgnoreCase(order.getPaymentStatus())) {
-                order.setPaymentStatus("REFUND_PENDING");
+            if (order.getPaymentStatus() == PaymentStatus.PAID) {
+                order.setPaymentStatus(PaymentStatus.REFUND_PENDING);
             }
             restoreOrderStock(order);
             try {
@@ -663,15 +680,15 @@ public class OrderServiceImpl implements OrderService {
             } catch (Exception e) {
                 log.warn("Failed to send order cancellation email: {}", e.getMessage());
             }
-        } else if (!"CANCELLED".equals(newStatus)) {
+        } else if (newStatus != OrderStatus.CANCELLED) {
             order.setStatus(newStatus);
-            if ("SHIPPED".equals(newStatus)) {
+            if (newStatus == OrderStatus.SHIPPED) {
                 try {
                     emailService.sendOrderShippedEmail(order.getUser().getEmail(), buildEmailContext(order));
                 } catch (Exception e) {
                     log.warn("Failed to send order shipped email: {}", e.getMessage());
                 }
-            } else if ("DELIVERED".equals(newStatus)) {
+            } else if (newStatus == OrderStatus.DELIVERED) {
                 try {
                     emailService.sendOrderDeliveredEmail(order.getUser().getEmail(), buildEmailContext(order));
                 } catch (Exception e) {
@@ -680,7 +697,9 @@ public class OrderServiceImpl implements OrderService {
             }
         }
 
-        return mapToResponse(orderRepository.save(order));
+        Order saved = orderRepository.save(order);
+        realtimeEventService.broadcast("ORDER_UPDATED", "{\"type\":\"ORDER_UPDATED\",\"orderId\":\"" + saved.getId() + "\",\"orderNumber\":\"" + saved.getOrderNumber() + "\"}");
+        return mapToResponse(saved);
     }
 
     @Override
@@ -712,10 +731,11 @@ public class OrderServiceImpl implements OrderService {
         }
 
         Order saved = orderRepository.save(order);
+        realtimeEventService.broadcast("ORDER_UPDATED", "{\"type\":\"ORDER_UPDATED\",\"orderId\":\"" + saved.getId() + "\",\"orderNumber\":\"" + saved.getOrderNumber() + "\"}");
 
         // If order is already SHIPPED and tracking was just added, re-send the shipped email
         // so the customer gets the courier tracking info
-        if ("SHIPPED".equalsIgnoreCase(saved.getStatus()) && request.getTrackingNumber() != null && !request.getTrackingNumber().isBlank()) {
+        if (saved.getStatus() == OrderStatus.SHIPPED && request.getTrackingNumber() != null && !request.getTrackingNumber().isBlank()) {
             try {
                 emailService.sendOrderShippedEmail(saved.getUser().getEmail(), buildEmailContext(saved));
                 log.info("Re-sent shipped email with tracking details for order {}", saved.getOrderNumber());
@@ -759,27 +779,27 @@ public class OrderServiceImpl implements OrderService {
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with ID: " + orderId));
 
         // Idempotency guard — approving an already-PAID order is a no-op
-        if ("PAID".equalsIgnoreCase(order.getPaymentStatus())) {
+        if (order.getPaymentStatus() == PaymentStatus.PAID) {
             log.info("Payment approval skipped — order {} is already PAID", order.getOrderNumber());
             return mapToResponse(order);
         }
 
         // Mark payment as received
-        order.setPaymentStatus("PAID");
+        order.setPaymentStatus(PaymentStatus.PAID);
 
         // Advance order status:
-        // PAYMENT_PROOF_SUBMITTED or PENDING → CONFIRMED
+        // PAYMENT_PROOF_SUBMITTED or PLACED → CONFIRMED
         // COD orders in SHIPPED/DELIVERED stay in their delivery status — only paymentStatus changes
-        String currentStatus = order.getStatus() != null ? order.getStatus().toUpperCase() : "PENDING";
-        if ("PAYMENT_PROOF_SUBMITTED".equals(currentStatus) || "PENDING".equals(currentStatus)) {
-            order.setStatus("CONFIRMED");
+        OrderStatus currentStatus = order.getStatus() != null ? order.getStatus() : OrderStatus.PLACED;
+        if (currentStatus == OrderStatus.PAYMENT_PROOF_SUBMITTED || currentStatus == OrderStatus.PLACED) {
+            order.setStatus(OrderStatus.CONFIRMED);
         }
         // For COD: SHIPPED/DELIVERED orders keep their status; only paymentStatus changes to PAID
 
         // Update linked transaction record to SUCCESS
         try {
             transactionRepository.findByOrderId(order.getId()).ifPresent(tx -> {
-                tx.setStatus("SUCCESS");
+                tx.setStatus(PaymentStatus.SUCCESS);
                 transactionRepository.save(tx);
             });
         } catch (Exception e) {
@@ -832,6 +852,8 @@ public class OrderServiceImpl implements OrderService {
 
         log.info("Payment approved for Order {} [method={}] by admin",
                 saved.getOrderNumber(), saved.getPaymentMethod());
+        realtimeEventService.broadcast("ORDER_UPDATED", "{\"type\":\"ORDER_UPDATED\",\"orderId\":\"" + saved.getId() + "\",\"orderNumber\":\"" + saved.getOrderNumber() + "\"}");
+        realtimeEventService.broadcast("STOCK_UPDATED", "{\"type\":\"STOCK_UPDATED\"}");
         return mapToResponse(saved);
     }
 
@@ -896,13 +918,13 @@ public class OrderServiceImpl implements OrderService {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with ID: " + orderId));
 
-        order.setPaymentStatus("FAILED");
-        order.setStatus("CANCELLED");
+        order.setPaymentStatus(PaymentStatus.FAILED);
+        order.setStatus(OrderStatus.CANCELLED);
         order.setCancellationReason("Manual UPI payment verification failed / invalid proof");
 
         try {
             transactionRepository.findByOrderId(order.getId()).ifPresent(tx -> {
-                tx.setStatus("FAILED");
+                tx.setStatus(PaymentStatus.FAILED);
                 transactionRepository.save(tx);
             });
         } catch (Exception ignored) {}
@@ -910,6 +932,8 @@ public class OrderServiceImpl implements OrderService {
         restoreOrderStock(order);
 
         Order saved = orderRepository.save(order);
+        realtimeEventService.broadcast("ORDER_UPDATED", "{\"type\":\"ORDER_UPDATED\",\"orderId\":\"" + saved.getId() + "\",\"orderNumber\":\"" + saved.getOrderNumber() + "\"}");
+        realtimeEventService.broadcast("STOCK_UPDATED", "{\"type\":\"STOCK_UPDATED\"}");
         try {
             emailService.sendOrderCancelledEmail(saved.getUser().getEmail(), buildEmailContext(saved));
         } catch (Exception e) {
@@ -923,7 +947,7 @@ public class OrderServiceImpl implements OrderService {
     public AdminDashboardResponse getAdminDashboardStats() {
         long totalOrders = orderRepository.count();
         long pendingOrders = orderRepository.countPendingOrders();
-        long pendingPaymentVerification = orderRepository.countByStatus("PAYMENT_PROOF_SUBMITTED");
+        long pendingPaymentVerification = orderRepository.countByStatus(OrderStatus.PAYMENT_PROOF_SUBMITTED);
         long deliveredOrders = orderRepository.countDeliveredOrders();
         BigDecimal totalRevenue = orderRepository.calculateTotalRevenue();
         if (totalRevenue == null) totalRevenue = BigDecimal.ZERO;
@@ -934,7 +958,7 @@ public class OrderServiceImpl implements OrderService {
 
         List<OrderResponse> recent = orderRepository.findAllByOrderByCreatedAtDesc(
                 org.springframework.data.domain.PageRequest.of(0, 5)
-        ).getContent().stream().map(this::mapToResponse).collect(Collectors.toList());
+        ).getContent().stream().map(this::mapToResponse).toList();
 
         return AdminDashboardResponse.builder()
                 .totalOrders(totalOrders)
@@ -954,15 +978,75 @@ public class OrderServiceImpl implements OrderService {
     @Transactional
     public void processAbandonedOrders() {
         LocalDateTime cutoff = LocalDateTime.now().minusHours(2);
-        List<Order> abandoned = orderRepository.findByStatusAndCreatedAtBefore("PENDING", cutoff);
+        List<Order> abandoned = orderRepository.findByStatusAndCreatedAtBefore(OrderStatus.PLACED, cutoff);
         for (Order o : abandoned) {
-            if ("PENDING".equalsIgnoreCase(o.getPaymentStatus()) && !"COD".equalsIgnoreCase(o.getPaymentMethod())) {
-                o.setStatus("CANCELLED");
+            if (o.getPaymentStatus() == PaymentStatus.PENDING && o.getPaymentMethod() != PaymentMethod.COD) {
+                o.setStatus(OrderStatus.CANCELLED);
                 restoreOrderStock(o);
                 orderRepository.save(o);
             }
         }
         log.info("Processed {} abandoned orders", abandoned.size());
+    }
+
+    @Override
+    @Transactional
+    @CacheEvict(value = {"products", "catalog", "categories"}, allEntries = true)
+    public void deleteOrderAdmin(UUID orderId) {
+        log.info("REST request by admin to permanently delete order ID: {}", orderId);
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found with ID: " + orderId));
+
+        // 1. If stock was deducted and order is not already cancelled, safely restore stock
+        if (Boolean.TRUE.equals(order.getIsStockDeducted()) && order.getStatus() != OrderStatus.CANCELLED) {
+            restoreOrderStock(order);
+        }
+
+        // 2. Delete payment proof screenshot from storage if present
+        try {
+            transactionRepository.findByOrderId(orderId).ifPresent(tx -> {
+                String proofUrl = tx.getPaymentProofUrl();
+                if (proofUrl != null && !proofUrl.isBlank()) {
+                    try {
+                        fileStorageService.deleteFile(proofUrl);
+                    } catch (Exception ex) {
+                        log.warn("Failed to delete receipt file from storage for order {}: {}", orderId, ex.getMessage());
+                    }
+                }
+            });
+        } catch (Exception ignored) {}
+
+        // 3. Clean up linked transaction and coupon usage records
+        try {
+            couponUsageRepository.deleteByOrderId(orderId);
+        } catch (Exception ignored) {}
+
+        try {
+            transactionRepository.deleteByOrderId(orderId);
+        } catch (Exception ignored) {}
+
+        // 4. Delete the order (cascade deletes order items)
+        orderRepository.delete(order);
+
+        // 5. Broadcast real-time SSE updates to refresh admin views and stock
+        realtimeEventService.broadcast("ORDER_UPDATED", "{\"type\":\"ORDER_UPDATED\",\"orderId\":\"" + orderId + "\"}");
+        realtimeEventService.broadcast("STOCK_UPDATED", "{\"type\":\"STOCK_UPDATED\"}");
+        log.info("Order {} successfully deleted by admin", order.getOrderNumber());
+    }
+
+    @Override
+    @Transactional
+    @CacheEvict(value = {"products", "catalog", "categories"}, allEntries = true)
+    public void bulkDeleteOrdersAdmin(List<UUID> orderIds) {
+        if (orderIds == null || orderIds.isEmpty()) return;
+        log.info("REST request by admin to bulk delete {} orders", orderIds.size());
+        for (UUID id : orderIds) {
+            try {
+                deleteOrderAdmin(id);
+            } catch (Exception ex) {
+                log.warn("Failed to delete order ID {} in bulk delete: {}", id, ex.getMessage());
+            }
+        }
     }
 
     private OrderResponse mapToResponse(Order order) {
@@ -999,7 +1083,7 @@ public class OrderServiceImpl implements OrderService {
                     .totalPrice(oi.getTotalPrice())
                     .product(pDto)
                     .build();
-        }).collect(Collectors.toList());
+        }).toList();
 
         AddressResponse addressResp = null;
         if (order.getShippingAddress() != null) {

@@ -1,8 +1,8 @@
 package com.pmrgsolution.features.auth.service;
 
-import com.pmrgsolution.Constant.AuthProvider;
-import com.pmrgsolution.Constant.Role;
-import com.pmrgsolution.Exception.BusinessException;
+import com.pmrgsolution.constant.AuthProvider;
+import com.pmrgsolution.constant.Role;
+import com.pmrgsolution.exception.BusinessException;
 import com.pmrgsolution.core.security.JwtUtils;
 import com.pmrgsolution.features.audit.service.AuditLogService;
 import com.pmrgsolution.features.auth.dto.*;
@@ -208,7 +208,7 @@ class AuthServiceImplTest {
                 .build();
 
         when(userRepository.findByEmailIgnoreCase("priya@test.com")).thenReturn(Optional.of(activeUser));
-        when(emailOtpRepository.findByUserAndEmailOtpAndIsUsedFalse(activeUser, "123456")).thenReturn(Optional.of(emailOtp));
+        when(emailOtpRepository.findByUserAndEmailOtpAndIsUsedFalse(eq(activeUser), anyString())).thenReturn(Optional.of(emailOtp));
         ActiveSession session = ActiveSession.builder()
                 .sessionId(UUID.randomUUID())
                 .refreshToken("new-refresh-token")

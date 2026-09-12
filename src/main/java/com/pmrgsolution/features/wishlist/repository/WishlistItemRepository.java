@@ -14,6 +14,9 @@ import java.util.UUID;
 public interface WishlistItemRepository extends JpaRepository<WishlistItem, UUID> {
     
     List<WishlistItem> findByUserId(UUID userId);
+
+    @Query("SELECT w FROM WishlistItem w JOIN FETCH w.product WHERE w.user.id = :userId ORDER BY w.createdAt DESC")
+    List<WishlistItem> findByUserIdWithProduct(@Param("userId") UUID userId);
     
     boolean existsByUserIdAndProductId(UUID userId, UUID productId);
     
@@ -21,5 +24,10 @@ public interface WishlistItemRepository extends JpaRepository<WishlistItem, UUID
     @Transactional
     @Query("DELETE FROM WishlistItem w WHERE w.user.id = :userId AND w.product.id = :productId")
     void deleteByUserIdAndProductId(@Param("userId") UUID userId, @Param("productId") UUID productId);
+
+    @Modifying
+    @Transactional
+    @Query("DELETE FROM WishlistItem w WHERE w.product.id = :productId")
+    void deleteByProductId(@Param("productId") UUID productId);
 }
 

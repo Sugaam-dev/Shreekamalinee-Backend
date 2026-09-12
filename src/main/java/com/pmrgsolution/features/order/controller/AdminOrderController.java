@@ -57,7 +57,7 @@ public class AdminOrderController {
     @PutMapping("/{orderId}/shipping")
     public ResponseEntity<OrderResponse> updateShippingDetails(
             @PathVariable UUID orderId,
-            @RequestBody ShippingDetailsUpdateRequest request) {
+            @Valid @RequestBody ShippingDetailsUpdateRequest request) {
         return ResponseEntity.ok(orderService.adminUpdateShippingDetails(orderId, request));
     }
 
@@ -83,6 +83,18 @@ public class AdminOrderController {
     public ResponseEntity<OrderResponse> createManualOrder(
             @Valid @RequestBody com.pmrgsolution.features.order.dto.AdminManualOrderRequest request) {
         return ResponseEntity.ok(orderService.createAdminManualOrder(request));
+    }
+
+    @DeleteMapping("/{orderId}")
+    public ResponseEntity<Void> deleteOrder(@PathVariable UUID orderId) {
+        orderService.deleteOrderAdmin(orderId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/bulk")
+    public ResponseEntity<Void> bulkDeleteOrders(@RequestBody java.util.List<UUID> orderIds) {
+        orderService.bulkDeleteOrdersAdmin(orderIds);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/dashboard/stats")

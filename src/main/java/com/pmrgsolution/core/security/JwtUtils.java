@@ -1,7 +1,10 @@
 package com.pmrgsolution.core.security;
 
-import java.security.Key;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.time.Instant;
 import java.util.Date;
+import javax.crypto.SecretKey;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -11,7 +14,6 @@ import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtParser;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.MalformedJwtException;
-import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.UnsupportedJwtException;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
@@ -20,8 +22,8 @@ import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Utility class for JSON Web Token operations.
- * Handles token generation, validation, and claim extraction.
+ * Enterprise Utility class for JSON Web Token operations.
+ * Modernized for JJWT 0.12.6 API with java.time.Instant.
  */
 @Slf4j
 @Component
@@ -36,12 +38,9 @@ public class JwtUtils {
     @Value("${shreekamalinee.jwt.refreshExpirationMs:7776000000}")
     private long jwtRefreshExpirationMs;
 
-    private Key key;
+    private SecretKey key;
     private JwtParser jwtParser;
 
-    /**
-     * Initialize the signing key and the parser once to improve performance.
-     */
     @PostConstruct
     public void init() {
         if (jwtSecret == null || jwtSecret.trim().isEmpty()) {
@@ -53,50 +52,46 @@ public class JwtUtils {
         try {
             keyBytes = Decoders.BASE64.decode(jwtSecret.trim());
             if (keyBytes == null || keyBytes.length < 64) {
-                keyBytes = jwtSecret.trim().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                keyBytes = jwtSecret.trim().getBytes(StandardCharsets.UTF_8);
             }
         } catch (Exception e) {
-            keyBytes = jwtSecret.trim().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            keyBytes = jwtSecret.trim().getBytes(StandardCharsets.UTF_8);
         }
 
         // Ensure minimum 512 bits (64 bytes) for HS512 cryptographic strength
         if (keyBytes.length < 64) {
             try {
-                java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-512");
+                MessageDigest digest = MessageDigest.getInstance("SHA-512");
                 keyBytes = digest.digest(keyBytes);
             } catch (Exception ignored) {}
         }
 
         this.key = Keys.hmacShaKeyFor(keyBytes);
         this.jwtParser = Jwts.parser()
-                .setSigningKey(key)
+                .verifyWith(key)
                 .build();
     }
 
-    /**
-     * Generates a token with the user's email as subject and a unique sessionId claim.
-     */
     public String generateToken(String email, String sessionId) {
+        Instant now = Instant.now();
         return Jwts.builder()
-                .setSubject(email)
+                .subject(email)
                 .claim("sessionId", sessionId)
-                .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + jwtExpirationMs))
-                .signWith(key, SignatureAlgorithm.HS512)
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(now.plusMillis(jwtExpirationMs)))
+                .signWith(key)
                 .compact();
     }
 
-    /**
-     * Generates a long-lived refresh token for token rotation.
-     */
     public String generateRefreshToken(String email, String sessionId) {
+        Instant now = Instant.now();
         return Jwts.builder()
-                .setSubject(email)
+                .subject(email)
                 .claim("sessionId", sessionId)
                 .claim("type", "REFRESH")
-                .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + jwtRefreshExpirationMs))
-                .signWith(key, SignatureAlgorithm.HS512)
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(now.plusMillis(jwtRefreshExpirationMs)))
+                .signWith(key)
                 .compact();
     }
 
@@ -112,19 +107,13 @@ public class JwtUtils {
         return getClaims(token).get("sessionId", String.class);
     }
 
-    /**
-     * Internal helper to extract all claims from the token.
-     */
     private Claims getClaims(String token) {
-        return jwtParser.parseClaimsJws(token).getBody();
+        return jwtParser.parseSignedClaims(token).getPayload();
     }
 
-    /**
-     * Validates the integrity and expiration of the JWT.
-     */
     public boolean validateJwtToken(String authToken) {
         try {
-            jwtParser.parseClaimsJws(authToken);
+            jwtParser.parseSignedClaims(authToken);
             return true;
         } catch (ExpiredJwtException e) {
             log.debug("JWT token is expired: {}", e.getMessage());

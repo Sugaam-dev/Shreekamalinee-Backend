@@ -1,5 +1,8 @@
 package com.pmrgsolution.features.order.entity;
 
+import com.pmrgsolution.constant.OrderStatus;
+import com.pmrgsolution.constant.PaymentMethod;
+import com.pmrgsolution.constant.PaymentStatus;
 import com.pmrgsolution.features.address.entity.ShippingAddress;
 import com.pmrgsolution.features.auth.entity.User;
 import jakarta.persistence.*;
@@ -64,14 +67,17 @@ public class Order {
     @Column(name = "final_amount", precision = 10, scale = 2)
     private BigDecimal finalAmount;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "payment_method", length = 50)
-    private String paymentMethod; // RAZORPAY, COD, DIRECT_UPI
+    private PaymentMethod paymentMethod;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "payment_status", length = 50)
-    private String paymentStatus; // PENDING, PAID, FAILED, REFUNDED
+    private PaymentStatus paymentStatus;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 50)
-    private String status; // PENDING, CONFIRMED, PROCESSING, SHIPPED, DELIVERED, CANCELLED
+    private OrderStatus status;
 
     @Column(name = "tracking_number")
     private String trackingNumber;
@@ -122,11 +128,6 @@ public class Order {
         return shippingFee != null ? shippingFee : BigDecimal.ZERO;
     }
 
-    /**
-     * Returns the courier partner name, falling back to a default if not set.
-     * NOTE: trackingUrl and estimatedDeliveryDate are intentionally NOT overridden here —
-     * Lombok @Getter returns the actual DB-stored values set by admins.
-     */
     public String getCourierName() {
         return courierPartner != null ? courierPartner : "Standard Courier";
     }

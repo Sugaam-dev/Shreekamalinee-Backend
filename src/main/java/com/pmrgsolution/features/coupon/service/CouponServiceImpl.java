@@ -1,28 +1,27 @@
 package com.pmrgsolution.features.coupon.service;
 
-import com.pmrgsolution.Exception.BusinessException;
-import com.pmrgsolution.Exception.ResourceNotFoundException;
+import com.pmrgsolution.constant.DiscountType;
+import com.pmrgsolution.exception.BusinessException;
+import com.pmrgsolution.exception.ResourceNotFoundException;
 import com.pmrgsolution.features.auth.entity.User;
 import com.pmrgsolution.features.auth.repository.UserRepository;
 import com.pmrgsolution.features.coupon.dto.CouponRequest;
 import com.pmrgsolution.features.coupon.dto.CouponResponse;
+import com.pmrgsolution.features.coupon.dto.CouponUsageResponse;
 import com.pmrgsolution.features.coupon.dto.CouponValidationResponse;
 import com.pmrgsolution.features.coupon.entity.Coupon;
 import com.pmrgsolution.features.coupon.repository.CouponRepository;
 import com.pmrgsolution.features.coupon.repository.CouponUsageRepository;
+import com.pmrgsolution.features.order.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
-import com.pmrgsolution.features.coupon.dto.CouponUsageResponse;
-import com.pmrgsolution.features.order.repository.OrderRepository;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -33,6 +32,7 @@ public class CouponServiceImpl implements CouponService {
     private final CouponUsageRepository couponUsageRepository;
     private final UserRepository userRepository;
     private final OrderRepository orderRepository;
+    private final com.pmrgsolution.core.service.RealtimeEventService realtimeEventService;
 
     @Override
     @Transactional
@@ -48,15 +48,16 @@ public class CouponServiceImpl implements CouponService {
                 .code(request.getCode().trim().toUpperCase())
                 .discountType(request.getDiscountType())
                 .discountValue(request.getDiscountValue())
-                .minOrderAmount(request.getMinOrderAmount())
+                .minOrderAmount(request.getMinPurchaseAmount())
                 .maxDiscountAmount(request.getMaxDiscountAmount())
                 .usageLimit(request.getUsageLimit())
                 .expiryDate(request.getExpiryDate())
-                .isActive(request.getIsActive() != null ? request.getIsActive() : true)
+                .isActive(true)
                 .applicableUserEmails(request.getApplicableUserEmails())
                 .build();
 
-        couponRepository.save(coupon);
+        Coupon saved = couponRepository.save(coupon);
+        realtimeEventService.broadcast("COUPON_UPDATED", "{\"type\":\"COUPON_UPDATED\",\"code\":\"" + saved.getCode() + "\"}");
     }
 
     @Override
@@ -64,7 +65,34 @@ public class CouponServiceImpl implements CouponService {
     public List<CouponResponse> getAllCoupons() {
         return couponRepository.findAll().stream()
                 .map(this::mapToResponse)
-                .collect(Collectors.toList());
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<CouponResponse> getAvailableCouponsForUser(UUID userId, String userEmail) {
+        LocalDateTime now = LocalDateTime.now();
+        return couponRepository.findAll().stream()
+                .filter(c -> {
+                    if (c.getApplicableUserEmails() != null && !c.getApplicableUserEmails().isEmpty()) {
+                        return userEmail != null && c.getApplicableUserEmails().stream()
+                                .anyMatch(email -> email != null && email.equalsIgnoreCase(userEmail));
+                    }
+                    return true;
+                })
+                .map(c -> {
+                    CouponResponse resp = mapToResponse(c);
+                    boolean expired = !c.isActive() || (c.getExpiryDate() != null && c.getExpiryDate().isBefore(now));
+                    resp.setIsExpired(expired);
+                    if (userId != null) {
+                        boolean used = couponUsageRepository.countByCouponIdAndUserId(c.getId(), userId) > 0;
+                        resp.setIsUsedByUser(used);
+                    } else {
+                        resp.setIsUsedByUser(false);
+                    }
+                    return resp;
+                })
+                .toList();
     }
 
     @Override
@@ -74,6 +102,7 @@ public class CouponServiceImpl implements CouponService {
             throw new ResourceNotFoundException("Coupon not found");
         }
         couponRepository.deleteById(id);
+        realtimeEventService.broadcast("COUPON_UPDATED", "{\"type\":\"COUPON_UPDATED\",\"couponId\":\"" + id + "\"}");
     }
 
     @Override
@@ -85,35 +114,29 @@ public class CouponServiceImpl implements CouponService {
         List<com.pmrgsolution.features.coupon.entity.CouponUsage> usages =
                 couponUsageRepository.findByCouponIdOrderByUsedAtDesc(couponId);
 
-        // PERF FIX: Batch-load all order numbers in a single query instead of N separate queries.
-        // Previously each usage triggered a separate orderRepository.findById() call.
         Set<UUID> orderIds = usages.stream()
                 .filter(u -> u.getOrderId() != null)
                 .map(com.pmrgsolution.features.coupon.entity.CouponUsage::getOrderId)
                 .collect(Collectors.toSet());
 
         Map<UUID, String> orderNumberMap = orderIds.isEmpty()
-                ? java.util.Collections.emptyMap()
+                ? Collections.emptyMap()
                 : orderRepository.findAllById(orderIds).stream()
                     .collect(Collectors.toMap(
                             com.pmrgsolution.features.order.entity.Order::getId,
                             com.pmrgsolution.features.order.entity.Order::getOrderNumber));
 
-        return usages.stream()
-                .map(u -> {
-                    String orderNum = u.getOrderId() != null ? orderNumberMap.get(u.getOrderId()) : null;
-                    return CouponUsageResponse.builder()
-                            .id(u.getId())
-                            .userId(u.getUser() != null ? u.getUser().getId() : null)
-                            .userFullName(u.getUser() != null ? u.getUser().getFullName() : "Guest Patron")
-                            .userEmail(u.getUser() != null ? u.getUser().getEmail() : "N/A")
-                            .userPhone(u.getUser() != null ? u.getUser().getPhoneNumber() : "N/A")
-                            .orderId(u.getOrderId())
-                            .orderNumber(orderNum)
-                            .usedAt(u.getUsedAt())
-                            .build();
-                })
-                .collect(Collectors.toList());
+        return usages.stream().map(u -> CouponUsageResponse.builder()
+                .id(u.getId())
+                .userId(u.getUser() != null ? u.getUser().getId() : null)
+                .userEmail(u.getUser() != null ? u.getUser().getEmail() : "Guest Patron")
+                .userFullName(u.getUser() != null ? u.getUser().getFullName() : "Guest")
+                .userPhone(u.getUser() != null ? u.getUser().getPhoneNumber() : null)
+                .orderId(u.getOrderId())
+                .orderNumber(u.getOrderId() != null ? orderNumberMap.getOrDefault(u.getOrderId(), "N/A") : "N/A")
+                .usedAt(u.getUsedAt())
+                .build())
+                .toList();
     }
 
     @Override
@@ -125,29 +148,31 @@ public class CouponServiceImpl implements CouponService {
     @Override
     @Transactional(readOnly = true)
     public CouponValidationResponse validateCoupon(String code, BigDecimal subtotal, UUID userId, String userEmail) {
-        if (code == null || code.trim().isEmpty()) {
-            return CouponValidationResponse.builder().valid(false).message("Coupon code is required").build();
+        if (code == null || code.isBlank()) {
+            return CouponValidationResponse.builder().valid(false).message("Coupon code cannot be blank").build();
         }
 
         Coupon coupon = couponRepository.findByCodeIgnoreCase(code.trim()).orElse(null);
-        if (coupon == null || !coupon.isActive()) {
-            return CouponValidationResponse.builder().valid(false).message("Invalid or inactive coupon code").build();
+        if (coupon == null) {
+            return CouponValidationResponse.builder().valid(false).message("Invalid coupon code").build();
+        }
+
+        if (!coupon.isActive()) {
+            return CouponValidationResponse.builder().valid(false).message("This coupon is no longer active").build();
         }
 
         if (coupon.getExpiryDate() != null && coupon.getExpiryDate().isBefore(LocalDateTime.now())) {
-            return CouponValidationResponse.builder().valid(false).message("This coupon has expired").build();
+            return CouponValidationResponse.builder().valid(false).message("Coupon has expired").build();
         }
 
         if (coupon.getUsageLimit() != null && coupon.getTimesUsed() >= coupon.getUsageLimit()) {
-            return CouponValidationResponse.builder().valid(false).message("Coupon usage limit exceeded").build();
+            return CouponValidationResponse.builder().valid(false).message("Coupon usage limit has been reached").build();
         }
 
-        // Resolve effective user ID & email
         UUID effectiveUserId = userId;
-        String effectiveEmail = userEmail != null && !userEmail.isBlank() ? userEmail.trim() : null;
-
-        if (effectiveUserId == null && effectiveEmail != null) {
-            User foundUser = userRepository.findByEmailIgnoreCase(effectiveEmail).orElse(null);
+        String effectiveEmail = userEmail;
+        if (effectiveUserId == null && effectiveEmail != null && !effectiveEmail.isBlank()) {
+            User foundUser = userRepository.findByEmailIgnoreCase(effectiveEmail.trim()).orElse(null);
             if (foundUser != null) {
                 effectiveUserId = foundUser.getId();
                 effectiveEmail = foundUser.getEmail();
@@ -156,12 +181,10 @@ public class CouponServiceImpl implements CouponService {
             effectiveEmail = userRepository.findById(effectiveUserId).map(User::getEmail).orElse(null);
         }
 
-        // Check if customer has already used this single-use / restricted coupon
         if (effectiveUserId != null && couponUsageRepository.countByCouponIdAndUserId(coupon.getId(), effectiveUserId) > 0) {
             return CouponValidationResponse.builder().valid(false).message("This customer has already used this coupon").build();
         }
 
-        // Check VIP / Restricted User Emails
         if (coupon.getApplicableUserEmails() != null && !coupon.getApplicableUserEmails().isEmpty()) {
             if (effectiveEmail == null || effectiveEmail.isBlank()) {
                 return CouponValidationResponse.builder().valid(false).message("Please provide customer email to apply this VIP exclusive coupon").build();
@@ -182,15 +205,15 @@ public class CouponServiceImpl implements CouponService {
         }
 
         BigDecimal calculatedDiscount = BigDecimal.ZERO;
-        if (subtotal != null) {
-            if ("PERCENTAGE".equalsIgnoreCase(coupon.getDiscountType())) {
-                calculatedDiscount = subtotal.multiply(coupon.getDiscountValue()).divide(BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP);
-                if (coupon.getMaxDiscountAmount() != null && calculatedDiscount.compareTo(coupon.getMaxDiscountAmount()) > 0) {
-                    calculatedDiscount = coupon.getMaxDiscountAmount();
+        if (subtotal != null && coupon.getDiscountType() != null) {
+            calculatedDiscount = switch (coupon.getDiscountType()) {
+                case PERCENTAGE -> {
+                    BigDecimal disc = subtotal.multiply(coupon.getDiscountValue()).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+                    yield (coupon.getMaxDiscountAmount() != null && disc.compareTo(coupon.getMaxDiscountAmount()) > 0)
+                            ? coupon.getMaxDiscountAmount() : disc;
                 }
-            } else {
-                calculatedDiscount = coupon.getDiscountValue();
-            }
+                case FIXED -> coupon.getDiscountValue();
+            };
         }
 
         BigDecimal finalPrice = subtotal != null ? subtotal.subtract(calculatedDiscount).max(BigDecimal.ZERO) : BigDecimal.ZERO;

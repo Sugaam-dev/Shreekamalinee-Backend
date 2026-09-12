@@ -22,4 +22,9 @@ public interface ReviewRepository extends JpaRepository<Review, UUID> {
     Double getAverageRating(@Param("productId") UUID productId);
 
     Long countByProductId(UUID productId);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.transaction.annotation.Transactional
+    @Query("DELETE FROM Review r WHERE r.product.id = :productId")
+    void deleteByProductId(@Param("productId") UUID productId);
 }

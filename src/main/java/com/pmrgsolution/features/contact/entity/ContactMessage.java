@@ -1,5 +1,6 @@
 package com.pmrgsolution.features.contact.entity;
 
+import com.pmrgsolution.constant.ContactMessageStatus;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -36,9 +37,10 @@ public class ContactMessage {
     @Column(name = "message", nullable = false, columnDefinition = "TEXT")
     private String message;
 
+    @Enumerated(EnumType.STRING)
     @Builder.Default
     @Column(name = "status", length = 30)
-    private String status = "NEW"; // NEW | READ | REPLIED | RESOLVED
+    private ContactMessageStatus status = ContactMessageStatus.NEW;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

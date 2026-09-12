@@ -1,5 +1,8 @@
 package com.pmrgsolution.features.payment.entity;
 
+import com.pmrgsolution.constant.PaymentGateway;
+import com.pmrgsolution.constant.PaymentMethod;
+import com.pmrgsolution.constant.PaymentStatus;
 import com.pmrgsolution.features.auth.entity.User;
 import com.pmrgsolution.features.order.entity.Order;
 import jakarta.persistence.*;
@@ -52,8 +55,9 @@ public class Transaction {
     @JoinColumn(name = "order_id")
     private Order order;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "gateway")
-    private String gateway;
+    private PaymentGateway gateway;
 
     @Column(name = "amount", precision = 10, scale = 2, nullable = false)
     private BigDecimal amount;
@@ -62,8 +66,9 @@ public class Transaction {
     @Builder.Default
     private String currency = "INR";
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "payment_method")
-    private String paymentMethod;
+    private PaymentMethod paymentMethod;
 
     @Column(name = "utr_number", unique = true)
     private String utrNumber;
@@ -77,8 +82,9 @@ public class Transaction {
     @Column(name = "payment_proof_url", columnDefinition = "TEXT")
     private String paymentProofUrl;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
-    private String status;
+    private PaymentStatus status;
 
     @Column(name = "coupon_code") 
     private String couponCode;

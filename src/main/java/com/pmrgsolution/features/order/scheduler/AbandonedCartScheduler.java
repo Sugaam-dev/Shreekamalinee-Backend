@@ -1,5 +1,6 @@
-package com.pmrgsolution.features.order.service;
+package com.pmrgsolution.features.order.scheduler;
 
+import com.pmrgsolution.features.order.service.OrderService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -27,9 +28,8 @@ public class AbandonedCartScheduler {
     private static final String LOCK_KEY = "scheduler:abandoned-orders:lock";
     private static final Duration LOCK_TTL = Duration.ofMinutes(10);
 
-    @Scheduled(cron = "0 0 * * * *") // Every hour at the top of the hour
+    @Scheduled(cron = "0 0 * * * *")
     public void cleanupAbandonedOrders() {
-        // Try to acquire the distributed lock — only one instance should run this job
         Boolean acquired = redisTemplate.opsForValue().setIfAbsent(LOCK_KEY, "1", LOCK_TTL);
         if (!Boolean.TRUE.equals(acquired)) {
             log.debug("Abandoned order cleanup already running on another instance — skipping.");
@@ -42,7 +42,6 @@ public class AbandonedCartScheduler {
         } catch (Exception e) {
             log.error("Error executing abandoned order cleanup scheduler: {}", e.getMessage());
         } finally {
-            // Release the lock after completion so other instances can pick it up next run
             redisTemplate.delete(LOCK_KEY);
         }
     }

@@ -1,4 +1,4 @@
-package com.pmrgsolution.Constant;
+package com.pmrgsolution.constant;
 
 public enum Role {
 

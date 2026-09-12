@@ -1,5 +1,6 @@
 package com.pmrgsolution.features.address.dto;
 
+import com.pmrgsolution.constant.AddressType;
 import lombok.*;
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -20,7 +21,7 @@ public class AddressResponse {
     private String state;
     private String postalCode;
     private String country;
-    private String addressType;
+    private AddressType addressType;
     private boolean isDefault;
     private LocalDateTime createdAt;
 }

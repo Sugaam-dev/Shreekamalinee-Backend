@@ -1,6 +1,6 @@
 package com.pmrgsolution.features.auth.service;
 
-import com.pmrgsolution.Exception.ResourceNotFoundException;
+import com.pmrgsolution.exception.ResourceNotFoundException;
 import com.pmrgsolution.features.auth.dto.UserAccountDTO;
 import com.pmrgsolution.features.auth.entity.User;
 import com.pmrgsolution.features.auth.repository.UserRepository;
@@ -51,7 +51,7 @@ public class ProfileServiceImpl implements ProfileService {
             String newPhone = updateRequest.getPhone().trim();
             if (!newPhone.equals(user.getPhoneNumber())) {
                 if (userRepository.existsByPhoneNumber(newPhone)) {
-                    throw new com.pmrgsolution.Exception.BusinessException(
+                    throw new com.pmrgsolution.exception.BusinessException(
                             "This mobile number is already linked to another account. Please use a different number.",
                             org.springframework.http.HttpStatus.CONFLICT);
                 }

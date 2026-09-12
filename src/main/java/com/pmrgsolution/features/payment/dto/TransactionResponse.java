@@ -1,5 +1,8 @@
 package com.pmrgsolution.features.payment.dto;
 
+import com.pmrgsolution.constant.PaymentGateway;
+import com.pmrgsolution.constant.PaymentMethod;
+import com.pmrgsolution.constant.PaymentStatus;
 import lombok.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -14,9 +17,9 @@ public class TransactionResponse {
     private UUID id;
     private UUID orderId;
     private String transactionId;
-    private String gateway;
+    private PaymentGateway gateway;
     private BigDecimal amount;
-    private String status;
-    private String paymentMethod;
+    private PaymentStatus status;
+    private PaymentMethod paymentMethod;
     private LocalDateTime createdAt;
 }

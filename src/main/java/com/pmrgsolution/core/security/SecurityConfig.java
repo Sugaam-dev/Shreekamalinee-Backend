@@ -79,6 +79,8 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(
+                        "/error",
+                        "/error/**",
                         "/api/v1/auth/login", "/api/v1/auth/register", "/api/v1/auth/verify-otp",
                         "/api/v1/auth/google-authenticate", "/api/v1/auth/forgot-password",
                         "/api/v1/auth/reset-password", "/api/v1/auth/refresh-token",
@@ -88,6 +90,7 @@ public class SecurityConfig {
                         "/actuator/health", "/actuator/info",
                         "/v3/api-docs/**", "/swagger-ui/**",
                         "/api/v1/orders/razorpay/webhook",
+                        "/api/v1/orders/bank-details",
                         "/api/v1/settings/public",
                         "/api/v1/contact",
                         // SECURITY FIX: Only coupon VALIDATE is public (for checkout preview without login)
@@ -95,7 +98,11 @@ public class SecurityConfig {
                         "/api/v1/coupons/validate",
                         "/api/v1/orders/coupons/validate",
                         "/api/v1/auth/email-service-status",
-                        "/api/auth/email-service-status"
+                        "/api/auth/email-service-status",
+                        "/realtime/stream",
+                        "/realtime/stream/**",
+                        "/api/v1/realtime/stream",
+                        "/api/v1/realtime/stream/**"
                 ).permitAll()
                 .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/catalog/**", "/api/v1/settings/**", "/uploads/**").permitAll()
 
@@ -106,7 +113,7 @@ public class SecurityConfig {
             .logout(logout -> logout
                     .logoutUrl("/api/v1/auth/logout")
                     .addLogoutHandler(logoutService)
-                    .deleteCookies("shreekamalinee-jwt", "shreekamalinee-refresh", "renaissance-jwt")
+                    .deleteCookies("shreekamalinee-jwt", "shreekamalinee-refresh")
                     .logoutSuccessHandler((request, response, authentication) -> {
                         response.setStatus(HttpServletResponse.SC_OK);
                         response.setContentType("application/json");

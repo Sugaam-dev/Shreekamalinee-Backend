@@ -1,5 +1,6 @@
 package com.pmrgsolution.core.config;
 
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
@@ -37,7 +38,8 @@ public class RedisCacheConfig implements CachingConfigurer {
                 BasicPolymorphicTypeValidator.builder()
                         .allowIfBaseType(Object.class)
                         .build(),
-                ObjectMapper.DefaultTyping.NON_FINAL
+                ObjectMapper.DefaultTyping.EVERYTHING,
+                JsonTypeInfo.As.PROPERTY
         );
 
         GenericJackson2JsonRedisSerializer jsonSerializer = new GenericJackson2JsonRedisSerializer(objectMapper);

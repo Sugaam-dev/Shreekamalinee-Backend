@@ -1,7 +1,7 @@
 package com.pmrgsolution.features.wishlist.service;
 
-import com.pmrgsolution.Exception.ResourceNotFoundException;
-import com.pmrgsolution.Exception.BusinessException;
+import com.pmrgsolution.exception.ResourceNotFoundException;
+import com.pmrgsolution.exception.BusinessException;
 import com.pmrgsolution.features.auth.entity.User;
 import com.pmrgsolution.features.auth.repository.UserRepository;
 import com.pmrgsolution.features.cart.dto.AddToCartRequest;
@@ -39,22 +39,22 @@ public class WishlistServiceImpl implements WishlistService {
     @Override
     @Transactional(readOnly = true)
     public List<ProductDTO> getWishlist(UUID userId) {
-        return wishlistRepository.findByUserId(userId).stream()
+        return wishlistRepository.findByUserIdWithProduct(userId).stream()
                 .map(item -> productService.getProductById(item.getProduct().getId()))
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<WishlistItemResponse> getWishlistItems(UUID userId) {
-        return wishlistRepository.findByUserId(userId).stream()
+        return wishlistRepository.findByUserIdWithProduct(userId).stream()
                 .map(item -> WishlistItemResponse.builder()
                         .id(item.getId())
                         .productId(item.getProduct().getId())
                         .product(productService.getProductById(item.getProduct().getId()))
                         .addedAt(item.getCreatedAt())
                         .build())
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Override

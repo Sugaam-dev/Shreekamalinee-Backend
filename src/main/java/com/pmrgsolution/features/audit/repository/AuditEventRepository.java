@@ -1,5 +1,6 @@
 package com.pmrgsolution.features.audit.repository;
 
+import com.pmrgsolution.constant.AuditEventType;
 import com.pmrgsolution.features.audit.entity.AuditEvent;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -12,9 +13,9 @@ import java.util.UUID;
 @Repository
 public interface AuditEventRepository extends JpaRepository<AuditEvent, UUID> {
     Page<AuditEvent> findAllByOrderByCreatedAtDesc(Pageable pageable);
-    Page<AuditEvent> findByEventTypeOrderByCreatedAtDesc(String eventType, Pageable pageable);
+    Page<AuditEvent> findByEventTypeOrderByCreatedAtDesc(AuditEventType eventType, Pageable pageable);
     Page<AuditEvent> findByUserEmailOrderByCreatedAtDesc(String userEmail, Pageable pageable);
-    Page<AuditEvent> findByEventTypeAndUserEmailOrderByCreatedAtDesc(String eventType, String userEmail, Pageable pageable);
+    Page<AuditEvent> findByEventTypeAndUserEmailOrderByCreatedAtDesc(AuditEventType eventType, String userEmail, Pageable pageable);
     List<AuditEvent> findByUserEmailOrderByCreatedAtDesc(String userEmail);
-    List<AuditEvent> findByEventTypeOrderByCreatedAtDesc(String eventType);
+    List<AuditEvent> findByEventTypeOrderByCreatedAtDesc(AuditEventType eventType);
 }

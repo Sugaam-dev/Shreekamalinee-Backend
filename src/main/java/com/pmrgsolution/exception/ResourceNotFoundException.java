@@ -1,11 +1,10 @@
-package com.pmrgsolution.Exception;
+package com.pmrgsolution.exception;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.ResponseStatus;
 
 /**
- * Custom Exception to provide clear feedback when an Exam or Document 
- * is missing.
+ * Exception thrown when a requested domain entity or resource is not found in the database.
  */
 @ResponseStatus(HttpStatus.NOT_FOUND)
 public class ResourceNotFoundException extends RuntimeException {

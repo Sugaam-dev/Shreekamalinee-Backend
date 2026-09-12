@@ -1,4 +1,4 @@
-package com.pmrgsolution.Exception;
+package com.pmrgsolution.exception;
 
 import org.springframework.http.HttpStatus;
 

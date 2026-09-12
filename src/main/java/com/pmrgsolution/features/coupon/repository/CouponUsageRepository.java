@@ -12,4 +12,6 @@ public interface CouponUsageRepository extends JpaRepository<CouponUsage, UUID> 
     long countByCouponIdAndUserId(UUID couponId, UUID userId);
     long countByCouponId(UUID couponId);
     List<CouponUsage> findByCouponIdOrderByUsedAtDesc(UUID couponId);
+    void deleteByOrderId(UUID orderId);
+    void deleteByOrderIdIn(List<UUID> orderIds);
 }

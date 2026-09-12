@@ -1,5 +1,6 @@
 package com.pmrgsolution.features.coupon.service;
 
+import com.pmrgsolution.constant.DiscountType;
 import com.pmrgsolution.features.auth.repository.UserRepository;
 import com.pmrgsolution.features.coupon.dto.CouponValidationResponse;
 import com.pmrgsolution.features.coupon.entity.Coupon;
@@ -28,6 +29,7 @@ class CouponServiceImplTest {
     @Mock private CouponRepository couponRepository;
     @Mock private CouponUsageRepository couponUsageRepository;
     @Mock private UserRepository userRepository;
+    @Mock private com.pmrgsolution.core.service.RealtimeEventService realtimeEventService;
 
     @InjectMocks private CouponServiceImpl couponService;
 
@@ -42,7 +44,7 @@ class CouponServiceImplTest {
         percentageCoupon = Coupon.builder()
                 .id(UUID.randomUUID())
                 .code("SAVE20")
-                .discountType("PERCENTAGE")
+                .discountType(DiscountType.PERCENTAGE)
                 .discountValue(BigDecimal.valueOf(20))
                 .minOrderAmount(BigDecimal.valueOf(500))
                 .usageLimit(100)
@@ -54,7 +56,7 @@ class CouponServiceImplTest {
         flatCoupon = Coupon.builder()
                 .id(UUID.randomUUID())
                 .code("FLAT100")
-                .discountType("FIXED")
+                .discountType(DiscountType.FIXED)
                 .discountValue(BigDecimal.valueOf(100))
                 .minOrderAmount(BigDecimal.valueOf(999))
                 .usageLimit(50)

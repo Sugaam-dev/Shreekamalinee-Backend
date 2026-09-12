@@ -150,9 +150,9 @@ public class OrderEmailContext {
         formula.append(" = ").append(fmt(INR, finalAmt));
 
         // ---- Payment display ----
-        String payMethod = order.getPaymentMethod();
+        String payMethod = order.getPaymentMethod() != null ? order.getPaymentMethod().name() : "COD";
         String payDisplay = resolvePaymentDisplay(payMethod);
-        String payStatus = order.getPaymentStatus() != null ? order.getPaymentStatus() : "PENDING";
+        String payStatus = order.getPaymentStatus() != null ? order.getPaymentStatus().name() : "PENDING";
         String payColor = "PAID".equalsIgnoreCase(payStatus) ? "#27ae60" : "#d35400";
 
         // ---- Refund logic ----
@@ -271,7 +271,7 @@ public class OrderEmailContext {
                 // utr
                 .utrNumber(utr)
                 // state
-                .orderStatus(order.getStatus())
+                .orderStatus(order.getStatus() != null ? order.getStatus().name() : "PLACED")
                 .cancellationReason(order.getCancellationReason())
                 .refundApplicable(refundApplicable)
                 // tracking

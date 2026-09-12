@@ -32,6 +32,8 @@ public interface CategoryRepository extends JpaRepository<Category, UUID> {
     @EntityGraph(attributePaths = {"suggestedAttributes", "parentCategory"})
     List<Category> findByParentCategoryId(UUID parentId);
 
+    long countByParentCategoryId(UUID parentId);
+
     @org.springframework.data.jpa.repository.Modifying
     @org.springframework.data.jpa.repository.Query("UPDATE Category c SET c.parentCategory = null WHERE c.parentCategory.id = :parentId")
     void unlinkParentCategory(@org.springframework.data.repository.query.Param("parentId") UUID parentId);

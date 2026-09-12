@@ -1,5 +1,6 @@
 package com.pmrgsolution.features.catalog.entity;
 
+import com.pmrgsolution.constant.GenderCategory;
 import jakarta.persistence.*;
 import lombok.*;
 import java.math.BigDecimal;
@@ -49,8 +50,9 @@ public class Product {
     @Column(name = "sku", nullable = false, unique = true, length = 100)
     private String sku;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "gender_category", length = 50)
-    private String genderCategory;
+    private GenderCategory genderCategory;
 
     @Column(name = "season", length = 50)
     private String season;
@@ -58,7 +60,7 @@ public class Product {
     @Column(name = "artisanal_story", columnDefinition = "TEXT")
     private String artisanalStory;
 
-    @Column(name = "fabric_care", columnDefinition = "TEXT")
+    @Column(name = "fabricCare", columnDefinition = "TEXT")
     private String fabricCare;
 
     @Column(name = "shipping_policy", columnDefinition = "TEXT")
@@ -114,7 +116,5 @@ public class Product {
     }
 
     public void setStock(int stock) {
-        // Product stock is calculated dynamically from variants.
-        // Individual variant stock must be updated via ProductVariant directly.
     }
 }

@@ -1,5 +1,6 @@
 package com.pmrgsolution.features.audit.entity;
 
+import com.pmrgsolution.constant.AuditEventType;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
@@ -26,8 +27,9 @@ public class AuditEvent {
     @Column(name = "id", updatable = false, nullable = false)
     private UUID id;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "event_type", nullable = false)
-    private String eventType; // e.g. "LOGIN_SUCCESS", "LOGIN_FAILED", "ACCOUNT_LOCKED", "PASSWORD_RESET", "ORDER_PLACED", "ADMIN_ACTION"
+    private AuditEventType eventType;
 
     @Column(name = "user_email")
     private String userEmail;

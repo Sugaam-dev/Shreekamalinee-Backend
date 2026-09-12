@@ -1,5 +1,6 @@
 package com.pmrgsolution.features.contact.dto;
 
+import com.pmrgsolution.constant.ContactMessageStatus;
 import lombok.*;
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -15,7 +16,7 @@ public class ContactMessageResponse {
     private String phone;
     private String subject;
     private String message;
-    private String status;
+    private ContactMessageStatus status;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

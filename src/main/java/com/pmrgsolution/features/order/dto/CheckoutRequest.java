@@ -1,5 +1,6 @@
 package com.pmrgsolution.features.order.dto;
 
+import com.pmrgsolution.constant.PaymentMethod;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
 import java.util.List;
@@ -15,15 +16,12 @@ public class CheckoutRequest {
     private UUID shippingAddressId;
 
     @NotNull(message = "Payment method is required")
-    private String paymentMethod; // RAZORPAY, COD, DIRECT_UPI, MANUAL
+    private PaymentMethod paymentMethod;
 
     private String couponCode;
     private String notes;
 
-    // Optional selective cart checkout
     private List<UUID> selectedCartItemIds;
-
-    // Optional direct "Buy Now" checkout (bypasses cart)
     private DirectItem directItem;
 
     @Getter

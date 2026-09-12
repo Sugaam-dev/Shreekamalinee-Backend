@@ -5,7 +5,6 @@ import com.pmrgsolution.features.order.dto.CheckoutRequest;
 import com.pmrgsolution.features.order.dto.OrderResponse;
 import com.pmrgsolution.features.order.service.OrderService;
 import com.pmrgsolution.features.settings.dto.BankDetailsResponse;
-import com.pmrgsolution.features.settings.dto.StoreSettingsResponse;
 import com.pmrgsolution.features.settings.service.StoreSettingsService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -40,17 +39,7 @@ public class OrderController {
      */
     @GetMapping("/bank-details")
     public ResponseEntity<BankDetailsResponse> getBankDetails() {
-        StoreSettingsResponse s = storeSettingsService.getStoreSettings();
-        return ResponseEntity.ok(BankDetailsResponse.builder()
-                .accountHolderName(s.getAccountHolderName())
-                .accountNumber(s.getAccountNumber())
-                .ifscCode(s.getIfscCode())
-                .bankName(s.getBankName())
-                .branchName(s.getBranchName())
-                .upiId(s.getUpiId())
-                .qrCodeUrl(s.getQrCodeUrl())
-                .whatsappNumber(s.getWhatsappNumber())
-                .build());
+        return ResponseEntity.ok(storeSettingsService.getBankDetails());
     }
 
     @PostMapping("/checkout")

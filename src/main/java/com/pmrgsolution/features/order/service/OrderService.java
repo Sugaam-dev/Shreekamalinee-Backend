@@ -32,4 +32,6 @@ public interface OrderService {
     void processAbandonedOrders();
     void deductOrderStock(com.pmrgsolution.features.order.entity.Order order);
     void restoreOrderStock(com.pmrgsolution.features.order.entity.Order order);
+    void deleteOrderAdmin(UUID orderId);
+    void bulkDeleteOrdersAdmin(List<UUID> orderIds);
 }

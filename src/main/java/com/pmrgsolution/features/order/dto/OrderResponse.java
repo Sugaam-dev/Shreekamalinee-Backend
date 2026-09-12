@@ -1,5 +1,8 @@
 package com.pmrgsolution.features.order.dto;
 
+import com.pmrgsolution.constant.OrderStatus;
+import com.pmrgsolution.constant.PaymentMethod;
+import com.pmrgsolution.constant.PaymentStatus;
 import com.pmrgsolution.features.address.dto.AddressResponse;
 import lombok.*;
 import java.math.BigDecimal;
@@ -25,9 +28,9 @@ public class OrderResponse {
     private BigDecimal shippingFee;
     private BigDecimal codHandlingFee;
     private BigDecimal finalAmount;
-    private String paymentMethod;
-    private String paymentStatus;
-    private String status;
+    private PaymentMethod paymentMethod;
+    private PaymentStatus paymentStatus;
+    private OrderStatus status;
     private String trackingNumber;
     private String courierPartner;
     private String trackingUrl;

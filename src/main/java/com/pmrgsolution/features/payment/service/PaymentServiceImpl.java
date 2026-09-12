@@ -1,13 +1,23 @@
 package com.pmrgsolution.features.payment.service;
 
-import com.pmrgsolution.Exception.BusinessException;
-import com.pmrgsolution.Exception.ResourceNotFoundException;
+import com.pmrgsolution.constant.OrderStatus;
+import com.pmrgsolution.constant.PaymentGateway;
+import com.pmrgsolution.constant.PaymentMethod;
+import com.pmrgsolution.constant.PaymentStatus;
+import com.pmrgsolution.core.service.FileStorageService;
+import com.pmrgsolution.exception.BusinessException;
+import com.pmrgsolution.exception.ResourceNotFoundException;
+import com.pmrgsolution.features.auth.service.EmailService;
+import com.pmrgsolution.features.coupon.entity.CouponUsage;
+import com.pmrgsolution.features.coupon.repository.CouponRepository;
+import com.pmrgsolution.features.coupon.repository.CouponUsageRepository;
 import com.pmrgsolution.features.order.dto.OrderEmailContext;
 import com.pmrgsolution.features.order.dto.OrderResponse;
 import com.pmrgsolution.features.order.entity.Order;
 import com.pmrgsolution.features.order.entity.OrderItem;
 import com.pmrgsolution.features.order.repository.OrderItemRepository;
 import com.pmrgsolution.features.order.repository.OrderRepository;
+import com.pmrgsolution.features.order.service.OrderService;
 import com.pmrgsolution.features.payment.dto.PaymentVerificationRequest;
 import com.pmrgsolution.features.payment.dto.TransactionResponse;
 import com.pmrgsolution.features.payment.entity.Transaction;
@@ -21,18 +31,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.util.UUID;
-
-import com.pmrgsolution.core.service.FileStorageService;
-import org.springframework.web.multipart.MultipartFile;
-
-import com.pmrgsolution.features.auth.service.EmailService;
-
-import com.pmrgsolution.features.coupon.entity.CouponUsage;
-import com.pmrgsolution.features.coupon.repository.CouponRepository;
-import com.pmrgsolution.features.coupon.repository.CouponUsageRepository;
 
 @Slf4j
 @Service
@@ -46,14 +48,10 @@ public class PaymentServiceImpl implements PaymentService {
     private final EmailService emailService;
     private final CouponRepository couponRepository;
     private final CouponUsageRepository couponUsageRepository;
-    private final com.pmrgsolution.features.order.service.OrderService orderService;
-    // FIX OPS-4: Inject the singleton RazorpayClient bean from RazorpayConfig.
-    // Previously, new RazorpayClient() was instantiated on every payment request —
-    // wasteful and incompatible with connection pooling.
+    private final OrderService orderService;
     private final RazorpayClient razorpayClient;
+    private final com.pmrgsolution.core.service.RealtimeEventService realtimeEventService;
 
-    // razorpayKeyId is still needed to send to the frontend for Razorpay checkout initialization.
-    // razorpayKeySecret is still needed separately for HMAC signature verification of webhook/payment.
     @Value("${razorpay.key.id:rzp_test_placeholder}")
     private String razorpayKeyId;
 
@@ -69,7 +67,7 @@ public class PaymentServiceImpl implements PaymentService {
         Order order = orderRepository.findByIdAndUserId(orderId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
 
-        if ("PAID".equalsIgnoreCase(order.getPaymentStatus())) {
+        if (order.getPaymentStatus() == PaymentStatus.PAID) {
             throw new BusinessException("Order is already paid", HttpStatus.BAD_REQUEST);
         }
 
@@ -111,8 +109,6 @@ public class PaymentServiceImpl implements PaymentService {
                 throw new BusinessException("Invalid Razorpay payment signature", HttpStatus.BAD_REQUEST);
             }
 
-            // SECURITY FIX: Use findByIdAndUserId to ensure the caller owns this order.
-            // Previously findById was used, allowing any user to mark any order as PAID.
             Order order = null;
             if (request.getOrderId() != null) {
                 order = orderRepository.findByIdAndUserId(request.getOrderId(), userId).orElse(null);
@@ -122,8 +118,8 @@ public class PaymentServiceImpl implements PaymentService {
             }
 
             if (order != null) {
-                order.setPaymentStatus("PAID");
-                order.setStatus("CONFIRMED");
+                order.setPaymentStatus(PaymentStatus.PAID);
+                order.setStatus(OrderStatus.CONFIRMED);
                 Order savedOrder = orderRepository.save(order);
 
                 // Deduct stock upon verified Razorpay online payment
@@ -132,9 +128,9 @@ public class PaymentServiceImpl implements PaymentService {
                 Transaction txn = Transaction.builder()
                         .order(savedOrder)
                         .transactionId(request.getRazorpayPaymentId())
-                        .gateway("RAZORPAY")
+                        .gateway(PaymentGateway.RAZORPAY)
                         .amount(savedOrder.getFinalAmount())
-                        .status("SUCCESS")
+                        .status(PaymentStatus.SUCCESS)
                         .paymentMethod(savedOrder.getPaymentMethod())
                         .build();
                 transactionRepository.save(txn);
@@ -207,9 +203,9 @@ public class PaymentServiceImpl implements PaymentService {
             }
         }
 
-        order.setPaymentMethod("MANUAL");
-        order.setPaymentStatus("PENDING");           // stays PENDING until admin approves
-        order.setStatus("PAYMENT_PROOF_SUBMITTED");  // signals admin that proof is awaiting review
+        order.setPaymentMethod(PaymentMethod.UPI);
+        order.setPaymentStatus(PaymentStatus.PENDING);                     // stays PENDING until admin approves
+        order.setStatus(OrderStatus.PAYMENT_PROOF_SUBMITTED);              // signals admin that proof is awaiting review
         orderRepository.save(order);
 
         // Deduct inventory when customer actually uploads receipt and submits payment proof
@@ -225,10 +221,10 @@ public class PaymentServiceImpl implements PaymentService {
         if (proofUrl != null) {
             txn.setPaymentProofUrl(proofUrl);
         }
-        txn.setGateway("MANUAL_UPI");
-        txn.setPaymentMethod("MANUAL");
-        txn.setStatus("PENDING");
-        txn.setTransactionId(utrNumber != null ? utrNumber.trim() : "MANUAL-" + System.currentTimeMillis());
+        txn.setGateway(PaymentGateway.DIRECT_UPI);
+        txn.setPaymentMethod(PaymentMethod.UPI);
+        txn.setStatus(PaymentStatus.PENDING_VERIFICATION);
+        txn.setTransactionId(utrNumber != null ? utrNumber.trim() : "UPI-" + System.currentTimeMillis());
 
         Transaction savedTxn = transactionRepository.save(txn);
 
@@ -261,6 +257,9 @@ public class PaymentServiceImpl implements PaymentService {
         } catch (Exception e) {
             log.warn("Failed to dispatch admin manual payment alert: {}", e.getMessage());
         }
+
+        realtimeEventService.broadcast("ORDER_UPDATED", "{\"type\":\"ORDER_UPDATED\",\"orderId\":\"" + order.getId() + "\",\"orderNumber\":\"" + order.getOrderNumber() + "\"}");
+        realtimeEventService.broadcast("STOCK_UPDATED", "{\"type\":\"STOCK_UPDATED\"}");
 
         return TransactionResponse.builder()
                 .id(savedTxn.getId())

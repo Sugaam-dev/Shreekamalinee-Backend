@@ -1,6 +1,7 @@
 package com.pmrgsolution.features.address.service;
 
-import com.pmrgsolution.Exception.ResourceNotFoundException;
+import com.pmrgsolution.constant.AddressType;
+import com.pmrgsolution.exception.ResourceNotFoundException;
 import com.pmrgsolution.features.address.dto.AddressRequest;
 import com.pmrgsolution.features.address.dto.AddressResponse;
 import com.pmrgsolution.features.address.entity.ShippingAddress;
@@ -13,7 +14,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -48,7 +48,7 @@ public class AddressServiceImpl implements AddressService {
                 .state(request.getState().trim())
                 .postalCode(request.getCleanPostalCode())
                 .country(request.getCountry() != null && !request.getCountry().isBlank() ? request.getCountry().trim() : "India")
-                .addressType(request.getAddressType() != null && !request.getAddressType().isBlank() ? request.getAddressType().trim() : "Home")
+                .addressType(request.getAddressType() != null ? request.getAddressType() : AddressType.HOME)
                 .isDefault(shouldBeDefault)
                 .build();
 
@@ -59,9 +59,9 @@ public class AddressServiceImpl implements AddressService {
     @Transactional(readOnly = true)
     public List<AddressResponse> getAddresses(UUID userId) {
         return addressRepository.findByUserId(userId).stream()
-                .filter(a -> !"MANUAL_ORDER".equalsIgnoreCase(a.getAddressType()))
+                .filter(a -> a.getAddressType() != AddressType.MANUAL_ORDER)
                 .map(this::mapToResponse)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Override
@@ -94,7 +94,7 @@ public class AddressServiceImpl implements AddressService {
         address.setState(request.getState().trim());
         address.setPostalCode(request.getCleanPostalCode());
         if (request.getCountry() != null && !request.getCountry().isBlank()) address.setCountry(request.getCountry().trim());
-        if (request.getAddressType() != null && !request.getAddressType().isBlank()) address.setAddressType(request.getAddressType().trim());
+        if (request.getAddressType() != null) address.setAddressType(request.getAddressType());
 
         return mapToResponse(addressRepository.save(address));
     }

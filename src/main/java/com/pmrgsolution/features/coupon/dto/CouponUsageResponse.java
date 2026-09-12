@@ -2,6 +2,7 @@ package com.pmrgsolution.features.coupon.dto;
 
 import lombok.*;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -18,5 +19,7 @@ public class CouponUsageResponse {
     private String userPhone;
     private UUID orderId;
     private String orderNumber;
+    private BigDecimal discountAmount;
+    private BigDecimal orderAmount;
     private LocalDateTime usedAt;
 }

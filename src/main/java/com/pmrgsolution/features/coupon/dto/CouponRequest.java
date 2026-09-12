@@ -1,7 +1,8 @@
 package com.pmrgsolution.features.coupon.dto;
 
-import com.fasterxml.jackson.annotation.JsonAlias;
-import com.fasterxml.jackson.annotation.JsonProperty;
+import com.pmrgsolution.constant.DiscountType;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import lombok.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -13,34 +14,19 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 public class CouponRequest {
+    @NotBlank(message = "Coupon code is required")
     private String code;
-    private String discountType; // PERCENTAGE, FIXED
+
+    @NotNull(message = "Discount type is required")
+    private DiscountType discountType;
+
+    @NotNull(message = "Discount value is required")
     private BigDecimal discountValue;
 
-    @JsonAlias({"minPurchaseAmount", "minimumPurchaseAmount", "minAmount"})
-    private BigDecimal minOrderAmount;
-
-    @JsonAlias({"maxDiscount", "maximumDiscountAmount"})
+    private BigDecimal minPurchaseAmount;
     private BigDecimal maxDiscountAmount;
-
     private Integer usageLimit;
     private LocalDateTime expiryDate;
-
-    @JsonAlias({"active", "enabled"})
-    @JsonProperty("isActive")
-    private Boolean isActive;
-
+    private String description;
     private List<String> applicableUserEmails;
-
-    public void setMinPurchaseAmount(BigDecimal minPurchaseAmount) {
-        if (this.minOrderAmount == null) {
-            this.minOrderAmount = minPurchaseAmount;
-        }
-    }
-
-    public void setActive(Boolean active) {
-        if (this.isActive == null) {
-            this.isActive = active;
-        }
-    }
 }

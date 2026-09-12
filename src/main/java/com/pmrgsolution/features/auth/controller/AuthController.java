@@ -47,7 +47,7 @@ public class AuthController {
      */
     @GetMapping({"", "/me"})
     @PreAuthorize("isAuthenticated()")
-    @Operation(summary = "Get current authenticated user details and subscription tier")
+    @Operation(summary = "Get current authenticated user profile and account details")
     public ResponseEntity<AuthResponse> getCurrentUser(Authentication authentication) {
         log.info("REST request to recover session for: {}", authentication.getName());
         AuthResponse response = authService.getAuthDetailsByEmail(authentication.getName());

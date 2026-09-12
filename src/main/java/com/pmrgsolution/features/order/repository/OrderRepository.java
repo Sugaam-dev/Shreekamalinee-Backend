@@ -1,5 +1,6 @@
 package com.pmrgsolution.features.order.repository;
 
+import com.pmrgsolution.constant.OrderStatus;
 import com.pmrgsolution.features.order.entity.Order;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -20,21 +21,21 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
     Optional<Order> findByOrderNumber(String orderNumber);
     Optional<Order> findByIdAndUserId(UUID id, UUID userId);
     Page<Order> findAllByOrderByCreatedAtDesc(Pageable pageable);
-    Page<Order> findByStatusOrderByCreatedAtDesc(String status, Pageable pageable);
+    Page<Order> findByStatusOrderByCreatedAtDesc(OrderStatus status, Pageable pageable);
 
-    @Query("SELECT COUNT(o) FROM Order o WHERE o.status != 'CANCELLED'")
+    @Query("SELECT COUNT(o) FROM Order o WHERE o.status != com.pmrgsolution.constant.OrderStatus.CANCELLED")
     long countActiveOrders();
 
-    @Query("SELECT COALESCE(SUM(COALESCE(o.finalAmount, o.totalAmount)), 0) FROM Order o WHERE o.paymentStatus = 'PAID'")
+    @Query("SELECT COALESCE(SUM(COALESCE(o.finalAmount, o.totalAmount)), 0) FROM Order o WHERE o.paymentStatus = com.pmrgsolution.constant.PaymentStatus.PAID")
     BigDecimal calculateTotalRevenue();
 
-    @Query("SELECT COUNT(o) FROM Order o WHERE o.status = 'PENDING'")
+    @Query("SELECT COUNT(o) FROM Order o WHERE o.status = com.pmrgsolution.constant.OrderStatus.PLACED OR o.status = com.pmrgsolution.constant.OrderStatus.PAYMENT_PROOF_SUBMITTED")
     long countPendingOrders();
 
-    @Query("SELECT COUNT(o) FROM Order o WHERE o.status = 'DELIVERED'")
+    @Query("SELECT COUNT(o) FROM Order o WHERE o.status = com.pmrgsolution.constant.OrderStatus.DELIVERED")
     long countDeliveredOrders();
 
-    List<Order> findByStatusAndCreatedAtBefore(String status, LocalDateTime threshold);
+    List<Order> findByStatusAndCreatedAtBefore(OrderStatus status, LocalDateTime threshold);
 
-    long countByStatus(String status);
+    long countByStatus(OrderStatus status);
 }

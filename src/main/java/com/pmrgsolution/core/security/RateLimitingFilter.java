@@ -3,34 +3,42 @@ package com.pmrgsolution.core.security;
 import io.github.bucket4j.Bandwidth;
 import io.github.bucket4j.Bucket;
 import io.github.bucket4j.ConsumptionProbe;
-import jakarta.servlet.*;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 /**
- * Enterprise 3-Tier Rate Limiting Filter.
+ * Enterprise 3-Tier Distributed Rate Limiting Filter backed by Redis with In-Memory fallback.
  *
  * Protects critical endpoints from credential stuffing & DDoS while guaranteeing
- * zero false lockouts (HTTP 429) for legitimate customers and administrators.
- *
- * IP Resolution: Since forward-headers-strategy=framework is configured in application.yml,
- * Spring's ForwardedHeaderFilter rewrites request.getRemoteAddr() to the real client IP
- * (from CF-Connecting-IP or X-Forwarded-For set by the trusted reverse proxy).
- * We use request.getRemoteAddr() directly — clients cannot forge their IP this way.
+ * unified, cluster-wide rate limits across all load-balanced Docker application instances.
  */
 @Slf4j
 @Component
-public class RateLimitingFilter implements Filter {
+@RequiredArgsConstructor
+public class RateLimitingFilter extends OncePerRequestFilter {
+
+    private final StringRedisTemplate redisTemplate;
 
     private static final long ENTRY_TTL_MS = Duration.ofMinutes(10).toMillis();
+
+    private static final int AUTH_LIMIT = 15;
+    private static final int SESSION_LIMIT = 180;
+    private static final int CATALOG_LIMIT = 360;
+    private static final int WINDOW_SECONDS = 60;
 
     private static class TimestampedBucket {
         final Bucket bucket;
@@ -46,62 +54,99 @@ public class RateLimitingFilter implements Filter {
         }
     }
 
-    // 3 Distinct Cache Tiers for Memory Safety & Granular Throttling
+    // In-memory fallback caches
     private final Map<String, TimestampedBucket> authMutationCache = new ConcurrentHashMap<>();
     private final Map<String, TimestampedBucket> sessionCheckoutCache = new ConcurrentHashMap<>();
     private final Map<String, TimestampedBucket> generalCatalogCache = new ConcurrentHashMap<>();
 
     @Override
-    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
-            throws IOException, ServletException {
-
-        HttpServletRequest httpRequest = (HttpServletRequest) request;
-        HttpServletResponse httpResponse = (HttpServletResponse) response;
+    protected void doFilterInternal(HttpServletRequest httpRequest, HttpServletResponse httpResponse, FilterChain filterChain)
+            throws ServletException, IOException {
 
         // Never throttle CORS preflight OPTIONS requests
         if ("OPTIONS".equalsIgnoreCase(httpRequest.getMethod())) {
-            chain.doFilter(request, response);
+            filterChain.doFilter(httpRequest, httpResponse);
             return;
         }
 
         String uri = httpRequest.getRequestURI();
 
-        // Whitelist webhooks, actuator probes, and swagger docs from rate limiting
+        // Whitelist webhooks, actuator probes, swagger docs, and real-time SSE streams from rate limiting
         if (uri.startsWith("/api/v1/orders/razorpay/webhook") ||
             uri.startsWith("/actuator/") ||
             uri.startsWith("/v3/api-docs") ||
-            uri.startsWith("/swagger-ui")) {
-            chain.doFilter(request, response);
+            uri.startsWith("/swagger-ui") ||
+            uri.startsWith("/realtime/stream") ||
+            uri.startsWith("/api/v1/realtime/stream")) {
+            filterChain.doFilter(httpRequest, httpResponse);
             return;
         }
 
-        // SECURITY FIX: Use request.getRemoteAddr() only.
-        // Spring's ForwardedHeaderFilter (enabled via forward-headers-strategy=framework)
-        // has already resolved the real client IP from the trusted proxy headers.
-        // Clients cannot forge this value — it is set by the server-side framework, not the client.
         String ip = httpRequest.getRemoteAddr();
         String tier = determineTier(uri);
-        String cacheKey = ip + ":" + tier;
+        int maxLimit = getTierLimit(tier);
 
-        TimestampedBucket entry;
-        switch (tier) {
-            case "AUTH_MUTATION" -> entry = authMutationCache.computeIfAbsent(cacheKey, k -> new TimestampedBucket(createAuthMutationBucket()));
-            case "SESSION_CHECKOUT" -> entry = sessionCheckoutCache.computeIfAbsent(cacheKey, k -> new TimestampedBucket(createSessionCheckoutBucket()));
-            default -> entry = generalCatalogCache.computeIfAbsent(cacheKey, k -> new TimestampedBucket(createGeneralCatalogBucket()));
+        boolean allowed = true;
+        long remaining = maxLimit;
+        long retryAfterSeconds = 1;
+        boolean redisProcessed = false;
+
+        // 1. Distributed Redis Rate Limiter
+        try {
+            if (redisTemplate != null && redisTemplate.getConnectionFactory() != null) {
+                String redisKey = "ratelimit:" + tier.toLowerCase() + ":" + ip;
+                Long currentCount = redisTemplate.opsForValue().increment(redisKey, 1);
+                if (currentCount != null) {
+                    if (currentCount == 1) {
+                        redisTemplate.expire(redisKey, Duration.ofSeconds(WINDOW_SECONDS));
+                    }
+                    if (currentCount > maxLimit) {
+                        allowed = false;
+                        Long ttl = redisTemplate.getExpire(redisKey, TimeUnit.SECONDS);
+                        retryAfterSeconds = (ttl != null && ttl > 0) ? ttl : WINDOW_SECONDS;
+                        remaining = 0;
+                    } else {
+                        remaining = maxLimit - currentCount;
+                    }
+                    redisProcessed = true;
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Redis unavailable for rate limiting, using in-memory Bucket4j fallback: {}", e.getMessage());
+            redisProcessed = false;
         }
 
-        entry.touch();
-        ConsumptionProbe probe = entry.bucket.tryConsumeAndReturnRemaining(1);
+        // 2. In-Memory Token Bucket Fallback
+        if (!redisProcessed) {
+            String cacheKey = ip + ":" + tier;
+            TimestampedBucket entry;
+            switch (tier) {
+                case "AUTH_MUTATION" -> entry = authMutationCache.computeIfAbsent(cacheKey, k -> new TimestampedBucket(createAuthMutationBucket()));
+                case "SESSION_CHECKOUT" -> entry = sessionCheckoutCache.computeIfAbsent(cacheKey, k -> new TimestampedBucket(createSessionCheckoutBucket()));
+                default -> entry = generalCatalogCache.computeIfAbsent(cacheKey, k -> new TimestampedBucket(createGeneralCatalogBucket()));
+            }
 
-        if (probe.isConsumed()) {
-            httpResponse.setHeader("x-rate-limit-remaining", String.valueOf(probe.getRemainingTokens()));
-            chain.doFilter(request, response);
+            entry.touch();
+            ConsumptionProbe probe = entry.bucket.tryConsumeAndReturnRemaining(1);
+
+            if (probe.isConsumed()) {
+                allowed = true;
+                remaining = probe.getRemainingTokens();
+            } else {
+                allowed = false;
+                remaining = 0;
+                retryAfterSeconds = Math.max(1, probe.getNanosToWaitForRefill() / 1_000_000_000L);
+            }
+        }
+
+        if (allowed) {
+            httpResponse.setHeader("x-rate-limit-remaining", String.valueOf(remaining));
+            filterChain.doFilter(httpRequest, httpResponse);
         } else {
             log.warn("Rate limit exceeded for IP: {} on URI: {} [Tier: {}]", ip, uri, tier);
             httpResponse.setStatus(429); // Too Many Requests
             httpResponse.setContentType("application/json");
             httpResponse.setHeader("x-rate-limit-remaining", "0");
-            long retryAfterSeconds = Math.max(1, probe.getNanosToWaitForRefill() / 1_000_000_000L);
             httpResponse.setHeader("x-rate-limit-retry-after", String.valueOf(retryAfterSeconds));
             httpResponse.getWriter().write(
                     "{\"error\": \"Too Many Requests\", \"message\": \"Rate limit exceeded. Please try again after "
@@ -142,6 +187,14 @@ public class RateLimitingFilter implements Filter {
 
         // Tier 3: Public catalog, product search, categories, settings, banners
         return "GENERAL_CATALOG";
+    }
+
+    private int getTierLimit(String tier) {
+        return switch (tier) {
+            case "AUTH_MUTATION" -> AUTH_LIMIT;
+            case "SESSION_CHECKOUT" -> SESSION_LIMIT;
+            default -> CATALOG_LIMIT;
+        };
     }
 
     /**

@@ -22,8 +22,12 @@ public class AuditLogServiceImpl implements AuditLogService {
     @Override
     public void logEvent(String eventType, String userEmail, String ipAddress, String details) {
         try {
+            com.pmrgsolution.constant.AuditEventType parsedType = com.pmrgsolution.constant.AuditEventType.fromString(eventType);
+            if (parsedType == null) {
+                parsedType = com.pmrgsolution.constant.AuditEventType.ADMIN_ACTION;
+            }
             AuditEvent event = AuditEvent.builder()
-                    .eventType(eventType)
+                    .eventType(parsedType)
                     .userEmail(userEmail)
                     .ipAddress(ipAddress)
                     .details(details)
@@ -39,10 +43,15 @@ public class AuditLogServiceImpl implements AuditLogService {
     @Transactional(readOnly = true)
     public Page<AuditEventResponse> getAuditLogs(String eventType, String userEmail, Pageable pageable) {
         Page<AuditEvent> page;
-        if (eventType != null && !eventType.isBlank() && userEmail != null && !userEmail.isBlank()) {
-            page = auditEventRepository.findByEventTypeAndUserEmailOrderByCreatedAtDesc(eventType.trim(), userEmail.trim(), pageable);
-        } else if (eventType != null && !eventType.isBlank()) {
-            page = auditEventRepository.findByEventTypeOrderByCreatedAtDesc(eventType.trim(), pageable);
+        com.pmrgsolution.constant.AuditEventType parsedType = null;
+        if (eventType != null && !eventType.isBlank()) {
+            parsedType = com.pmrgsolution.constant.AuditEventType.fromString(eventType);
+        }
+
+        if (parsedType != null && userEmail != null && !userEmail.isBlank()) {
+            page = auditEventRepository.findByEventTypeAndUserEmailOrderByCreatedAtDesc(parsedType, userEmail.trim(), pageable);
+        } else if (parsedType != null) {
+            page = auditEventRepository.findByEventTypeOrderByCreatedAtDesc(parsedType, pageable);
         } else if (userEmail != null && !userEmail.isBlank()) {
             page = auditEventRepository.findByUserEmailOrderByCreatedAtDesc(userEmail.trim(), pageable);
         } else {
