@@ -63,6 +63,10 @@ public class User {
     private Boolean enabled = false;
 
     @Builder.Default
+    @Column(name = "is_email_verified")
+    private Boolean emailVerified = false;
+
+    @Builder.Default
     @Column(name = "is_account_non_locked")
     private Boolean accountNonLocked = true;
 

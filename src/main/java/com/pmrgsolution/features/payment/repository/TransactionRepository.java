@@ -15,6 +15,8 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
     Optional<Transaction> findByRazorpayOrderId(String razorpayOrderId);
     Optional<Transaction> findByUtrNumber(String utrNumber);
     List<Transaction> findByCreatedAtBeforeAndPaymentProofUrlIsNotNull(LocalDateTime cutoff);
+    long countByUserId(UUID userId);
+    void deleteByUserId(UUID userId);
     void deleteByOrderId(UUID orderId);
     void deleteByOrderIdIn(List<UUID> orderIds);
 }

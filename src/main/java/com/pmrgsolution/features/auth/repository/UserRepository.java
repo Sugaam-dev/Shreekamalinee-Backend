@@ -15,6 +15,7 @@ import com.pmrgsolution.features.auth.entity.User;
 public interface UserRepository extends JpaRepository<User, UUID> {
     Optional<User> findByEmailIgnoreCase(String email); 
     Boolean existsByEmailIgnoreCase(String email);
+    Optional<User> findByPhoneNumber(String phoneNumber);
     Boolean existsByPhoneNumber(String phoneNumber);
 
     @Query("SELECT u FROM User u WHERE " +

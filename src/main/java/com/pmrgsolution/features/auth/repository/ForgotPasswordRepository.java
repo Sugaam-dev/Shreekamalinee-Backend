@@ -21,4 +21,8 @@ public interface ForgotPasswordRepository extends JpaRepository<ForgotPassword, 
     @Modifying
     @Query("DELETE FROM ForgotPassword f WHERE f.expiresAt < :now OR f.isUsed = true")
     int deleteExpiredOrUsed(@Param("now") LocalDateTime now);
+
+    @Modifying
+    @Query("DELETE FROM ForgotPassword f WHERE f.user = :user")
+    void deleteByUser(@Param("user") User user);
 }

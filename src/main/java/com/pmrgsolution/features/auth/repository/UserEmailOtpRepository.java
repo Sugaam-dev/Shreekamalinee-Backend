@@ -21,4 +21,8 @@ public interface UserEmailOtpRepository extends JpaRepository<UserEmailOtp, UUID
     @Modifying
     @Query("DELETE FROM UserEmailOtp u WHERE u.expiresAt < :now OR u.isUsed = true")
     int deleteExpiredOrUsed(@Param("now") LocalDateTime now);
+
+    @Modifying
+    @Query("DELETE FROM UserEmailOtp u WHERE u.user = :user")
+    void deleteByUser(@Param("user") User user);
 }

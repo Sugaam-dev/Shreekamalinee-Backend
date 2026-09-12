@@ -4,7 +4,7 @@ spring:
 
   # Database Configuration — environment variables with Docker default (port 5433)
   datasource:
-    url: "${DB_URL:jdbc:postgresql://localhost:5433/shreekamalinee_db?options=-c%20timezone=Asia/Kolkata}"
+    url: "${DB_URL:jdbc:postgresql://localhost:5433/shreekamalinee_db}"
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
@@ -14,8 +14,6 @@ spring:
       connection-timeout: 30000
       idle-timeout: 600000
       max-lifetime: 1800000
-      data-source-properties:
-        options: "-c timezone=Asia/Kolkata"
 
   # Flyway Database Migrations
   flyway:

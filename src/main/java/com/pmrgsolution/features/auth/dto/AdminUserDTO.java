@@ -16,6 +16,8 @@ public class AdminUserDTO {
     private String email;
     private String phoneNumber;
     private String role;
+    private String provider;
     private boolean enabled;
+    private boolean emailVerified;
     private LocalDateTime createdAt;
 }

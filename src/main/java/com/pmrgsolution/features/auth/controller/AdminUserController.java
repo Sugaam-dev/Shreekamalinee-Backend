@@ -30,4 +30,10 @@ public class AdminUserController {
             @RequestParam("enabled") boolean enabled) {
         return ResponseEntity.ok(adminUserService.updateUserStatus(userId, enabled));
     }
+
+    @DeleteMapping("/{userId}")
+    public ResponseEntity<Void> deleteUser(@PathVariable UUID userId) {
+        adminUserService.deleteUser(userId);
+        return ResponseEntity.noContent().build();
+    }
 }

@@ -7,4 +7,5 @@ import java.util.UUID;
 public interface AdminUserService {
     List<AdminUserDTO> searchUsers(String query);
     AdminUserDTO updateUserStatus(UUID userId, boolean enabled);
+    void deleteUser(UUID userId);
 }

@@ -93,8 +93,9 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByEmailIgnoreCase(verifiedEmail)
                 .map(existingUser -> {
                     log.info("Google login for existing user: {}", verifiedEmail);
-                    if (!existingUser.isEnabled()) {
+                    if (!existingUser.isEnabled() || !Boolean.TRUE.equals(existingUser.getEmailVerified())) {
                         existingUser.setEnabled(true);
+                        existingUser.setEmailVerified(true);
                         return userRepository.save(existingUser);
                     }
                     return existingUser;
@@ -107,6 +108,7 @@ public class AuthServiceImpl implements AuthService {
                             .email(verifiedEmail)
                             .role(Role.USER)
                             .enabled(true)
+                            .emailVerified(true)
                             .provider(AuthProvider.GOOGLE)
                             .build();
                     return userRepository.save(newUser);
@@ -204,38 +206,66 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public String register(RegistrationRequest request) {
-        log.info("Registration attempt: {}", request.getEmail());
+        String normalizedEmail = request.getEmail().trim().toLowerCase();
+        String rawPhone = request.getPhoneNumber() != null && !request.getPhoneNumber().isBlank()
+                ? request.getPhoneNumber().trim()
+                : null;
 
-        if (request.getPhoneNumber() != null && !request.getPhoneNumber().isBlank()) {
-            if (userRepository.existsByPhoneNumber(request.getPhoneNumber().trim())) {
-                throw new BusinessException("This mobile number is already registered with another account. Please login or use a different number.", HttpStatus.CONFLICT);
+        log.info("Registration attempt for email: {}", normalizedEmail);
+
+        // 1. Check if an account with this email already exists and is verified
+        Optional<User> existingUserOpt = userRepository.findByEmailIgnoreCase(normalizedEmail);
+        if (existingUserOpt.isPresent() && existingUserOpt.get().isEnabled()) {
+            throw new BusinessException("An account with this email already exists. Please sign in.", HttpStatus.CONFLICT);
+        }
+
+        // 2. Validate phone number against other verified users
+        if (rawPhone != null) {
+            Optional<User> phoneUserOpt = userRepository.findByPhoneNumber(rawPhone);
+            if (phoneUserOpt.isPresent()) {
+                User phoneUser = phoneUserOpt.get();
+                // If another user who is ALREADY VERIFIED holds this phone number, reject
+                if (phoneUser.isEnabled() && !phoneUser.getEmail().equalsIgnoreCase(normalizedEmail)) {
+                    throw new BusinessException("This mobile number is already registered with another account. Please sign in or use a different number.", HttpStatus.CONFLICT);
+                }
+                // If a stale UNVERIFIED user under a different email holds this phone number, release it
+                if (!phoneUser.isEnabled() && !phoneUser.getEmail().equalsIgnoreCase(normalizedEmail)) {
+                    phoneUser.setPhoneNumber(null);
+                    userRepository.save(phoneUser);
+                }
             }
         }
-        
-        return userRepository.findByEmailIgnoreCase(request.getEmail())
-            .map(user -> {
-                if (user.isEnabled()) {
-                    throw new BusinessException("Email already verified. Please login.", HttpStatus.CONFLICT);
-                }
-                generateAndSendRegistrationOtp(user);
-                return "User exists but not verified. New OTP sent.";
-            })
-            .orElseGet(() -> {
-                User newUser = User.builder()
-                        .firstName(request.getFirstName())
-                        .lastName(request.getLastName())
-                        .email(request.getEmail())
-                        .phoneNumber(request.getPhoneNumber())
-                        .password(passwordEncoder.encode(request.getPassword()))
-                        .role(Role.USER)    
-                        .enabled(false) 
-                        .provider(AuthProvider.LOCAL)
-                        .build();
 
-                userRepository.save(newUser);
-                generateAndSendRegistrationOtp(newUser);
-                return "Registration successful. Verify your email via OTP.";
-            });
+        // 3. If user previously registered with this email but never verified OTP, update details & resend fresh OTP
+        if (existingUserOpt.isPresent()) {
+            User unverifiedUser = existingUserOpt.get();
+            unverifiedUser.setFirstName(request.getFirstName().trim());
+            unverifiedUser.setLastName(request.getLastName().trim());
+            unverifiedUser.setPhoneNumber(rawPhone);
+            unverifiedUser.setPassword(passwordEncoder.encode(request.getPassword()));
+            unverifiedUser.setEmailVerified(false);
+            unverifiedUser.setEnabled(false);
+            userRepository.save(unverifiedUser);
+            generateAndSendRegistrationOtp(unverifiedUser);
+            return "Registration details updated. A fresh verification code has been dispatched to your email.";
+        }
+
+        // 4. New unverified user creation
+        User newUser = User.builder()
+                .firstName(request.getFirstName().trim())
+                .lastName(request.getLastName().trim())
+                .email(normalizedEmail)
+                .phoneNumber(rawPhone)
+                .password(passwordEncoder.encode(request.getPassword()))
+                .role(Role.USER)
+                .enabled(false)
+                .emailVerified(false)
+                .provider(AuthProvider.LOCAL)
+                .build();
+
+        userRepository.save(newUser);
+        generateAndSendRegistrationOtp(newUser);
+        return "Registration successful. Verify your email via OTP.";
     }
 
     @Override
@@ -255,7 +285,8 @@ public class AuthServiceImpl implements AuthService {
         emailOtp.setVerified(true);
         emailOtpRepository.save(emailOtp);
 
-        user.setEnabled(true); 
+        user.setEnabled(true);
+        user.setEmailVerified(true);
         user.resetFailedLogin();
         userRepository.save(user);
 
