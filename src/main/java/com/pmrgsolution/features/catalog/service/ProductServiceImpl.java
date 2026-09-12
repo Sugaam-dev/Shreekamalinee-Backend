@@ -98,10 +98,9 @@ public class ProductServiceImpl implements ProductService {
                     "A category with slug '" + safeSlug + "' already exists " + scope, HttpStatus.CONFLICT);
         }
 
-        List<String> suggestedAttributes = request.getSuggestedAttributes();
-        if ((suggestedAttributes == null || suggestedAttributes.isEmpty()) && parent != null) {
-            suggestedAttributes = parent.getSuggestedAttributes();
-        }
+        List<String> suggestedAttributes = request.getSuggestedAttributes() != null
+                ? new ArrayList<>(request.getSuggestedAttributes())
+                : new ArrayList<>();
 
         Category category = Category.builder()
                 .name(request.getName())
@@ -162,7 +161,12 @@ public class ProductServiceImpl implements ProductService {
         }
 
         if (request.getSuggestedAttributes() != null) {
-            category.setSuggestedAttributes(request.getSuggestedAttributes());
+            if (category.getSuggestedAttributes() == null) {
+                category.setSuggestedAttributes(new ArrayList<>(request.getSuggestedAttributes()));
+            } else {
+                category.getSuggestedAttributes().clear();
+                category.getSuggestedAttributes().addAll(request.getSuggestedAttributes());
+            }
         }
 
         Category saved = categoryRepository.save(category);
@@ -305,8 +309,8 @@ public class ProductServiceImpl implements ProductService {
                 .fabricCare(request.getFabricCare())
                 .shippingPolicy(request.getShippingPolicy())
                 .category(category)
-                .highlights(request.getHighlights())
-                .aboutItem(request.getAboutItem())
+                .highlights(request.getHighlights() != null ? new java.util.HashMap<>(request.getHighlights()) : new java.util.HashMap<>())
+                .aboutItem(request.getAboutItem() != null ? new ArrayList<>(request.getAboutItem()) : new ArrayList<>())
                 .build();
 
         if (request.getVariants() != null && !request.getVariants().isEmpty()) {
